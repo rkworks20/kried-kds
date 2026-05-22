@@ -14,7 +14,7 @@ const char* SERVER_HOST   = "kried-kds-production.up.railway.app";
 // ── OTA update ───────────────────────────────────────
 // Bump FIRMWARE_VERSION and kds_oled/version.txt together when you push new code.
 // GitHub Actions compiles and posts the binary; the ESP32 downloads it on next boot.
-#define FIRMWARE_VERSION  "1.0.1"
+#define FIRMWARE_VERSION  "1.0.2"
 #define OTA_VERSION_URL   "https://raw.githubusercontent.com/rkworks20/kried-kds/main/kds_oled/version.txt"
 #define OTA_FIRMWARE_URL  "https://github.com/rkworks20/kried-kds/releases/download/firmware-latest/firmware.bin"
 
@@ -47,10 +47,6 @@ bool     blinkState    = false;
 String   currentBill       = "__UNKNOWN__";
 uint32_t lastDisplayUpdate = 0;
 
-// ── Burger blink ─────────────────────────────────────
-#define BURGER_BLINK_MS 500    // toggle every 500 ms → 1 blink per second
-bool     burgerVisible   = true;
-uint32_t lastBurgerBlink = 0;
 
 // ── Flip animation state ─────────────────────────────
 enum FlipPhase { FLIP_IDLE, FLIP_SHRINK, FLIP_FOLD, FLIP_GROW };
@@ -350,29 +346,6 @@ String pollCurrentBill() {
   return body.substring(start, end);
 }
 
-// ── Burger blink (non-blocking) ──────────────────────
-// Toggles the burger icon every BURGER_BLINK_MS while a bill is on display
-// and no flip animation is running.  Redraws only when the state changes.
-void updateBurgerBlink() {
-  if (flipPhase != FLIP_IDLE) return;                          // don't interrupt animation
-  if (currentBill == "" || currentBill == "__UNKNOWN__") return; // logo screen — no blink
-  if (millis() - lastBurgerBlink < BURGER_BLINK_MS) return;
-
-  lastBurgerBlink = millis();
-  burgerVisible   = !burgerVisible;
-
-  oled.clearDisplay();
-  oled.setTextColor(SSD1306_WHITE);
-  oled.setTextSize(3);
-  oled.setCursor(billTextX(currentBill), 4);
-  oled.print(currentBill);
-  if (burgerVisible) {
-    oled.drawBitmap(BURGER_X, BURGER_Y, burgerIcon, BURGER_W, BURGER_H,
-                    SSD1306_BLACK, SSD1306_WHITE);
-  }
-  oled.display();
-}
-
 // ── OTA update check ─────────────────────────────────
 // Called once after WiFi connects.  Fetches version.txt from GitHub; if
 // the remote version differs from FIRMWARE_VERSION it downloads the binary
@@ -462,8 +435,7 @@ void setup() {
 // ── Loop ─────────────────────────────────────────────
 void loop() {
   updateLED();
-  updateFlip();        // runs flip animation steps non-blocking
-  updateBurgerBlink(); // blinks burger icon every 1 s while a bill is shown
+  updateFlip(); // runs flip animation steps non-blocking
 
   // WiFi watchdog
   if (appState == STATE_WIFI_CONNECTING) {
@@ -491,9 +463,7 @@ void loop() {
     if (fetched != currentBill) {
       Serial.println("Bill changed: " + currentBill + " → " + fetched);
       startFlip(currentBill == "__UNKNOWN__" ? "" : currentBill, fetched);
-      currentBill     = fetched;
-      burgerVisible   = true;         // burger starts visible after every flip
-      lastBurgerBlink = millis();     // reset blink timer
+      currentBill = fetched;
       setLedMode(LED_BLINK_FAST);
     }
   }
