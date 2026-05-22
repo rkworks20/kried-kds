@@ -1021,6 +1021,11 @@ function undoDeliver() {
   Object.assign(billsMap, snap.billsMap);
   billsHistory = snap.billsHistory;
 
+  // Reset the display timer for the restored bill so it starts fresh
+  if (restoredId && billsMap[restoredId] && billsMap[restoredId].onDisplay) {
+    billsMap[restoredId].onDisplaySince = Date.now();
+  }
+
   updateUndoBtn();
   renderBills();
   broadcast();
