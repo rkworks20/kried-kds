@@ -14,7 +14,7 @@ const char* SERVER_HOST   = "kried-kds-production.up.railway.app";
 // ── OTA update ───────────────────────────────────────
 // Bump FIRMWARE_VERSION and kds_oled/version.txt together when you push new code.
 // GitHub Actions compiles and posts the binary; the ESP32 downloads it on next boot.
-#define FIRMWARE_VERSION  "1.0.5"
+#define FIRMWARE_VERSION  "1.0.6"
 // Both URLs served directly from GitHub — no CDN redirects
 #define OTA_VERSION_URL   "https://raw.githubusercontent.com/rkworks20/kried-kds/main/kds_oled/version.txt"
 #define OTA_FIRMWARE_URL  "https://raw.githubusercontent.com/rkworks20/kried-kds/main/firmware/firmware.bin"
@@ -47,6 +47,11 @@ bool     blinkState    = false;
 // ── Bill state ──────────────────────────────────────
 String   currentBill       = "__UNKNOWN__";
 uint32_t lastDisplayUpdate = 0;
+
+// ── Icon alternation (burger ↔ fries every 1 s) ──────
+#define ICON_SWITCH_MS  1000
+bool     showFries      = false;
+uint32_t lastIconSwitch = 0;
 
 
 // ── Flip animation state ─────────────────────────────
@@ -347,6 +352,45 @@ String pollCurrentBill() {
   return body.substring(start, end);
 }
 
+// ── Fries icon (drawn with GFX primitives, same 40×32 area as burger) ────────
+void drawFriesIcon() {
+  // Five fry sticks — 3 px wide, 16 px tall
+  oled.fillRect( 2, 0, 3, 16, SSD1306_WHITE);
+  oled.fillRect( 8, 0, 3, 16, SSD1306_WHITE);
+  oled.fillRect(14, 0, 3, 16, SSD1306_WHITE);
+  oled.fillRect(20, 0, 3, 16, SSD1306_WHITE);
+  oled.fillRect(26, 0, 3, 16, SSD1306_WHITE);
+  // Container body
+  oled.fillRect(0, 16, 32, 15, SSD1306_WHITE);
+  // Centre divider on the container (dark line)
+  oled.drawFastVLine(16, 16, 15, SSD1306_BLACK);
+}
+
+// ── Icon alternation (non-blocking) ──────────────────
+// Switches between burger and fries every ICON_SWITCH_MS while a bill
+// is shown and no flip animation is running.
+void updateIconSwitch() {
+  if (flipPhase != FLIP_IDLE) return;
+  if (currentBill == "" || currentBill == "__UNKNOWN__") return;
+  if (millis() - lastIconSwitch < ICON_SWITCH_MS) return;
+
+  lastIconSwitch = millis();
+  showFries      = !showFries;
+
+  oled.clearDisplay();
+  oled.setTextColor(SSD1306_WHITE);
+  oled.setTextSize(3);
+  oled.setCursor(billTextX(currentBill), 4);
+  oled.print(currentBill);
+  if (showFries) {
+    drawFriesIcon();
+  } else {
+    oled.drawBitmap(BURGER_X, BURGER_Y, burgerIcon, BURGER_W, BURGER_H,
+                    SSD1306_BLACK, SSD1306_WHITE);
+  }
+  oled.display();
+}
+
 // ── OTA update check ─────────────────────────────────
 // Called once after WiFi connects.  Fetches version.txt from GitHub; if
 // the remote version differs from FIRMWARE_VERSION it downloads the binary
@@ -460,7 +504,8 @@ void setup() {
 // ── Loop ─────────────────────────────────────────────
 void loop() {
   updateLED();
-  updateFlip(); // runs flip animation steps non-blocking
+  updateFlip();       // runs flip animation steps non-blocking
+  updateIconSwitch(); // alternates burger ↔ fries every 1 s
 
   // WiFi watchdog
   if (appState == STATE_WIFI_CONNECTING) {
@@ -488,7 +533,9 @@ void loop() {
     if (fetched != currentBill) {
       Serial.println("Bill changed: " + currentBill + " → " + fetched);
       startFlip(currentBill == "__UNKNOWN__" ? "" : currentBill, fetched);
-      currentBill = fetched;
+      currentBill    = fetched;
+      showFries      = false;        // always start with burger after a flip
+      lastIconSwitch = millis();
       setLedMode(LED_BLINK_FAST);
     }
   }
