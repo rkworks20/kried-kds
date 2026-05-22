@@ -43,7 +43,7 @@ jobs:
           # ── 3. Compile ─────────────────────────────────────────────────────────
           mkdir -p build
           arduino-cli compile \
-            --fqbn esp32:esp32:esp32 \
+            --fqbn esp32:esp32:esp32s3 \
             --output-dir build \
             kds_oled
 
