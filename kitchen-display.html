@@ -432,6 +432,28 @@ function broadcast() {
     ws.send(JSON.stringify({ type: 'state', payload: getState() }));
 }
 
+// ── Instant wake-up sync ──────────────────────────────
+// When the device/tab wakes from sleep or regains focus, immediately
+// reconnect (if dropped) or request fresh state (if still open).
+// This makes state updates instant instead of waiting for the 2s timer.
+function syncNow() {
+  if (!location.host) return;
+  if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+    // Connection dropped during sleep — cancel pending timer and reconnect immediately
+    clearTimeout(wsReconnectTimer);
+    wsConnect();
+  } else if (ws.readyState === WebSocket.OPEN) {
+    // Connection still alive — just request the latest state
+    ws.send(JSON.stringify({ type: 'request_state' }));
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') syncNow();
+});
+
+window.addEventListener('focus', syncNow);
+
 wsConnect();
 
 // ── Helpers ──
