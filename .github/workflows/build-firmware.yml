@@ -15,42 +15,46 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and release firmware
+      - name: Build firmware and commit binary
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
 
-          # ── 1. Install arduino-cli (direct binary, no install script) ──────────
+          # ── 1. Install arduino-cli ─────────────────────────────────────────────
           curl -fsSL \
             "https://github.com/arduino/arduino-cli/releases/download/v1.1.1/arduino-cli_1.1.1_Linux_64bit.tar.gz" \
             | tar -xz -C /usr/local/bin arduino-cli
           arduino-cli version
 
-          # ── 2. Add ESP32 board support ─────────────────────────────────────────
+          # ── 2. Board + libraries ───────────────────────────────────────────────
           arduino-cli config init
           arduino-cli config set board_manager.additional_urls \
             "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
           arduino-cli core update-index
           arduino-cli core install esp32:esp32
-
-          # ── 3. Install libraries ───────────────────────────────────────────────
           arduino-cli lib install "Adafruit GFX Library"
           arduino-cli lib install "Adafruit SSD1306"
           arduino-cli lib install "Adafruit BusIO"
 
-          # ── 4. Compile ─────────────────────────────────────────────────────────
+          # ── 3. Compile ─────────────────────────────────────────────────────────
           mkdir -p build
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
             --output-dir build \
             kds_oled
 
-          # ── 5. Publish release ─────────────────────────────────────────────────
+          # ── 4. Commit binary to repo (served via raw.githubusercontent.com) ────
+          mkdir -p firmware
+          cp build/kds_oled.ino.bin firmware/firmware.bin
           VERSION=$(cat kds_oled/version.txt | tr -d '[:space:]')
-          gh release delete firmware-latest --yes --cleanup-tag 2>/dev/null || true
-          gh release create firmware-latest \
-            --title "Firmware ${VERSION}" \
-            --notes "Built from ${GITHUB_SHA} — v${VERSION}" \
-            "build/kds_oled.ino.bin#firmware.bin"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add firmware/firmware.bin
+          git diff --cached --quiet \
+            && echo "Binary unchanged" \
+            || git commit -m "build: firmware v${VERSION} [skip ci]"
+          git push

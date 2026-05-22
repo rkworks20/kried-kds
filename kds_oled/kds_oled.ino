@@ -14,9 +14,10 @@ const char* SERVER_HOST   = "kried-kds-production.up.railway.app";
 // ── OTA update ───────────────────────────────────────
 // Bump FIRMWARE_VERSION and kds_oled/version.txt together when you push new code.
 // GitHub Actions compiles and posts the binary; the ESP32 downloads it on next boot.
-#define FIRMWARE_VERSION  "1.0.2"
+#define FIRMWARE_VERSION  "1.0.3"
+// Both URLs served directly from GitHub — no CDN redirects
 #define OTA_VERSION_URL   "https://raw.githubusercontent.com/rkworks20/kried-kds/main/kds_oled/version.txt"
-#define OTA_FIRMWARE_URL  "https://github.com/rkworks20/kried-kds/releases/download/firmware-latest/firmware.bin"
+#define OTA_FIRMWARE_URL  "https://raw.githubusercontent.com/rkworks20/kried-kds/main/firmware/firmware.bin"
 
 #define UPDATE_INTERVAL   3000    // poll /current-bill every 3 seconds
 #define WIFI_TIMEOUT_MS  15000
@@ -351,6 +352,15 @@ String pollCurrentBill() {
 // the remote version differs from FIRMWARE_VERSION it downloads the binary
 // from the firmware-latest release and flashes it, then auto-restarts.
 void checkOTAUpdate() {
+  // Show check on OLED
+  oled.clearDisplay();
+  oled.setTextSize(1);
+  oled.setTextColor(SSD1306_WHITE);
+  oled.setCursor(2, 4);  oled.println("CHECKING UPDATE");
+  oled.setCursor(2, 16); oled.println("v" FIRMWARE_VERSION);
+  oled.display();
+  delay(500);
+
   Serial.println("OTA: checking version at " OTA_VERSION_URL);
 
   // Step 1 — fetch version.txt
@@ -359,12 +369,20 @@ void checkOTAUpdate() {
   HTTPClient http;
   if (!http.begin(verClient, OTA_VERSION_URL)) {
     Serial.println("OTA: cannot reach version URL — skipping");
+    showSplash("OTA: no reach");
+    delay(1500);
     return;
   }
   int code = http.GET();
   if (code != 200) {
     Serial.printf("OTA: version fetch failed (HTTP %d) — skipping\n", code);
     http.end();
+    oled.clearDisplay();
+    oled.setTextSize(1);
+    oled.setTextColor(SSD1306_WHITE);
+    oled.setCursor(2, 8); oled.print("OTA ERR: "); oled.println(code);
+    oled.display();
+    delay(2000);
     return;
   }
   String latest = http.getString();
@@ -375,6 +393,13 @@ void checkOTAUpdate() {
 
   if (latest == FIRMWARE_VERSION) {
     Serial.println("OTA: firmware is up to date");
+    oled.clearDisplay();
+    oled.setTextSize(1);
+    oled.setTextColor(SSD1306_WHITE);
+    oled.setCursor(2, 4);  oled.println("FIRMWARE OK");
+    oled.setCursor(2, 16); oled.println("v" FIRMWARE_VERSION);
+    oled.display();
+    delay(1000);
     return;
   }
 
