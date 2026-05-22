@@ -1013,16 +1013,62 @@ function undoDeliver() {
   if (billsUndoStack.length === 0) return;
   const snap = billsUndoStack.pop();
 
-  // Restore billsMap
+  // Detect which bill is being restored (in snapshot but not in current map)
+  const restoredId = Object.keys(snap.billsMap).find(id => !billsMap[id]);
+
+  // Restore billsMap and history
   Object.keys(billsMap).forEach(k => delete billsMap[k]);
   Object.assign(billsMap, snap.billsMap);
-
-  // Restore history
   billsHistory = snap.billsHistory;
 
   updateUndoBtn();
   renderBills();
   broadcast();
+
+  // Animate the restored card sliding back in from the right, at the top
+  if (!restoredId) return;
+  const container = document.getElementById('bills-scroll');
+  const card = container && container.querySelector(`.bill-card[data-bill-id="${restoredId}"]`);
+  if (!card) return;
+
+  // Move to top of list
+  container.prepend(card);
+
+  // Measure natural dimensions before collapsing
+  const naturalHeight = card.scrollHeight;
+
+  // Start state: off-screen right, fully collapsed (mirrors the exit state)
+  card.style.animation   = 'none';          // cancel the default slideIn
+  card.style.transition  = 'none';
+  card.style.transform   = 'translateX(110%)';
+  card.style.opacity     = '0';
+  card.style.maxHeight   = '0';
+  card.style.marginBottom = '0';
+  card.style.overflow    = 'hidden';
+
+  // Force browser to register starting values
+  card.getBoundingClientRect();
+
+  // Animate to natural state — reverse of the slide-out timing
+  card.style.transition = [
+    'transform 0.38s cubic-bezier(0.2, 0, 0.4, 1)',  // decelerate in (vs ease-in out)
+    'opacity 0.28s ease-out',
+    'max-height 0.38s ease',
+    'margin-bottom 0.38s ease'
+  ].join(', ');
+  card.style.transform    = 'translateX(0)';
+  card.style.opacity      = '1';
+  card.style.maxHeight    = naturalHeight + 'px';
+  card.style.marginBottom = '16px';
+
+  // Clean up inline overrides once animation settles
+  setTimeout(() => {
+    card.style.transition   = '';
+    card.style.animation    = '';
+    card.style.maxHeight    = '';
+    card.style.overflow     = '';
+    card.style.marginBottom = '';
+  }, 420);
 }
 
 // ── Bills History Modal ──
