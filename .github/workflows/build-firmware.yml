@@ -1,0 +1,83 @@
+name: Build & Release Firmware
+
+# Runs whenever kds_oled source files change on main.
+# Compiles the sketch with arduino-cli and publishes the binary
+# as a GitHub Release tagged "firmware-latest" so the ESP32 can
+# download it over HTTPS on every boot.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'kds_oled/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create/delete releases
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # ── Arduino CLI ──────────────────────────────────────────────────────────
+      - name: Install Arduino CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Add ESP32 board index
+        run: |
+          arduino-cli config init
+          arduino-cli config set board_manager.additional_urls \
+            "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
+
+      - name: Install ESP32 board support
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install "Adafruit GFX Library"
+          arduino-cli lib install "Adafruit SSD1306"
+          arduino-cli lib install "Adafruit BusIO"
+
+      # ── Compile ──────────────────────────────────────────────────────────────
+      - name: Compile firmware
+        run: |
+          mkdir -p build
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            --output-dir build \
+            kds_oled
+        # ⚠ If your board is NOT a generic ESP32 DevKit, change the --fqbn above.
+        # Common values:
+        #   ESP32-C3:   esp32:esp32:esp32c3
+        #   ESP32-S3:   esp32:esp32:esp32s3
+        #   NodeMCU-32: esp32:esp32:nodemcu-32s
+        # Run `arduino-cli board listall esp32` to see all options.
+
+      - name: Read version
+        id: ver
+        run: |
+          echo "version=$(cat kds_oled/version.txt | tr -d '[:space:]')" >> $GITHUB_OUTPUT
+
+      # ── Release ──────────────────────────────────────────────────────────────
+      # Always overwrite the "firmware-latest" tag so the URL stays constant:
+      #   https://github.com/rkworks20/kried-kds/releases/download/firmware-latest/firmware.bin
+      - name: Delete old firmware-latest release (if exists)
+        run: |
+          gh release delete firmware-latest --yes --cleanup-tag 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create firmware-latest release
+        run: |
+          gh release create firmware-latest \
+            --title "Firmware ${{ steps.ver.outputs.version }}" \
+            --notes "Auto-built from commit ${{ github.sha }} — v${{ steps.ver.outputs.version }}" \
+            "build/kds_oled.ino.bin#firmware.bin"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

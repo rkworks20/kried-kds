@@ -1,6 +1,7 @@
 #include <WiFi.h>
-#include <ArduinoWebsockets.h>
-#include <ArduinoJson.h>
+#include <HTTPClient.h>
+#include <HTTPUpdate.h>
+#include <WiFiClientSecure.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -8,17 +9,18 @@
 // ── Config ───────────────────────────────────────────
 const char* WIFI_SSID     = "Airtel_Rk?s Wifi";
 const char* WIFI_PASSWORD = "wifi1234";
-const char* SERVER_IP     = "kried-kds-production.up.railway.app";  // ← your Railway domain
-const int   SERVER_PORT   = 443;    // WSS uses port 443 (HTTPS)
+const char* SERVER_HOST   = "kried-kds-production.up.railway.app";
 
-#define UPDATE_INTERVAL      3000
-#define WIFI_TIMEOUT_MS      15000
-#define WIFI_RETRY_MS        5000
-#define WS_CONNECT_TIMEOUT   8000
-#define WS_RETRY_BASE_MS     2000
-#define WS_RETRY_MAX_MS      30000
-#define HEARTBEAT_INTERVAL   10000
-#define HEARTBEAT_TIMEOUT    20000
+// ── OTA update ───────────────────────────────────────
+// Bump FIRMWARE_VERSION and kds_oled/version.txt together when you push new code.
+// GitHub Actions compiles and posts the binary; the ESP32 downloads it on next boot.
+#define FIRMWARE_VERSION  "1.0.0"
+#define OTA_VERSION_URL   "https://raw.githubusercontent.com/rkworks20/kried-kds/main/kds_oled/version.txt"
+#define OTA_FIRMWARE_URL  "https://github.com/rkworks20/kried-kds/releases/download/firmware-latest/firmware.bin"
+
+#define UPDATE_INTERVAL   3000    // poll /current-bill every 3 seconds
+#define WIFI_TIMEOUT_MS  15000
+#define WIFI_RETRY_MS     5000
 
 #define SCREEN_WIDTH  128
 #define SCREEN_HEIGHT 32
@@ -28,17 +30,9 @@ Adafruit_SSD1306 oled(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 #define LED_PIN 21
 
 // ── App state ───────────────────────────────────────
-enum AppState { STATE_WIFI_CONNECTING, STATE_WS_CONNECTING, STATE_CONNECTED, STATE_RETRY_WAIT };
-AppState appState = STATE_WIFI_CONNECTING;
-uint32_t stateEnteredAt  = 0;
+enum AppState { STATE_WIFI_CONNECTING, STATE_CONNECTED };
+AppState appState        = STATE_WIFI_CONNECTING;
 uint32_t lastWifiAttempt = 0;
-uint32_t lastWsAttempt   = 0;
-uint32_t lastTrafficAt   = 0;
-uint32_t wsRetryDelay    = WS_RETRY_BASE_MS;
-bool     justConnected   = false;
-
-using namespace websockets;
-WebsocketsClient wsClient;
 
 // ── LED ─────────────────────────────────────────────
 enum LedMode { LED_OFF, LED_BREATHING, LED_BLINK_FAST };
@@ -51,8 +45,6 @@ bool     blinkState    = false;
 
 // ── Bill state ──────────────────────────────────────
 String   currentBill       = "__UNKNOWN__";
-String   pendingBill       = "";
-bool     pendingUpdate     = false;
 uint32_t lastDisplayUpdate = 0;
 
 // ── Flip animation state ─────────────────────────────
@@ -65,8 +57,7 @@ uint32_t  lastFlipStep = 0;
 #define   FLIP_STEP_MS 25
 #define   FLIP_FOLD_MS 40
 
-void setState(AppState s) { appState = s; stateEnteredAt = millis(); }
-uint32_t timeInState() { return millis() - stateEnteredAt; }
+void setState(AppState s) { appState = s; }
 
 // ── LED ─────────────────────────────────────────────
 void setupLED() {
@@ -293,63 +284,14 @@ void showSplash(const String& msg) {
   oled.display();
 }
 
-// ── WebSocket ───────────────────────────────────────
-void onMessage(WebsocketsMessage msg) {
-  lastTrafficAt = millis();
-  Serial.print("WS RX: ");
-  Serial.println(msg.data());
-  DynamicJsonDocument doc(2048);
-  DeserializationError err = deserializeJson(doc, msg.data());
-  if (err) {
-    Serial.printf("  JSON parse err: %s (len=%u)\n", err.c_str(), (unsigned)msg.data().length());
-    return;
-  }
-  const char* type = doc["type"];
-  if (!type) {
-    Serial.println("  ignored: no 'type' field");
-    return;
-  }
-  if (strcmp(type, "display") != 0) {
-    Serial.printf("  ignored: type=%s (expected 'display')\n", type);
-    return;
-  }
-  JsonArray arr = doc["bills"].as<JsonArray>();
-  pendingBill   = arr.size() > 0 ? arr[0].as<String>() : "";
-  pendingUpdate = true;
-  Serial.printf("  queued pendingBill=%s\n", pendingBill.c_str());
-}
-
-void onEvent(WebsocketsEvent event, String data) {
-  if (event == WebsocketsEvent::ConnectionOpened) {
-    Serial.println("Server connected");
-    lastTrafficAt = millis();
-    wsRetryDelay  = WS_RETRY_BASE_MS;
-    setState(STATE_CONNECTED);
-    showSplash("CONNECTED");
-    setLedMode(LED_BREATHING);
-    justConnected = true;
-    currentBill   = "__UNKNOWN__";
-    pendingUpdate = false;
-  } else if (event == WebsocketsEvent::ConnectionClosed) {
-    Serial.println("Server disconnected");
-    setState(STATE_RETRY_WAIT);
-    showSplash("RECONNECTING...");
-    setLedMode(LED_OFF);
-  } else if (event == WebsocketsEvent::GotPing || event == WebsocketsEvent::GotPong) {
-    lastTrafficAt = millis();
-  }
-}
-
+// ── WiFi ─────────────────────────────────────────────
 void onWiFiEvent(WiFiEvent_t event) {
   if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
     Serial.println("WiFi dropped");
-    if (appState == STATE_CONNECTED || appState == STATE_WS_CONNECTING) {
-      wsClient.close();
-      setState(STATE_WIFI_CONNECTING);
-      lastWifiAttempt = 0;
-      showSplash("WiFi lost...");
-      setLedMode(LED_OFF);
-    }
+    setState(STATE_WIFI_CONNECTING);
+    lastWifiAttempt = 0;
+    showSplash("WiFi lost...");
+    setLedMode(LED_OFF);
   }
 }
 
@@ -362,40 +304,115 @@ void tryWifi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   uint32_t start = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_TIMEOUT_MS) {
-    // non-blocking-ish wait — yield to system
-    yield();
-  }
+  while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_TIMEOUT_MS) yield();
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("WiFi connected — " + WiFi.localIP().toString());
-    showSplash("WiFi OK");
-    setState(STATE_WS_CONNECTING);
-    lastWsAttempt = 0;
+    showSplash("CONNECTED");
+    setLedMode(LED_BREATHING);
+    setState(STATE_CONNECTED);
+    currentBill = "__UNKNOWN__";  // force a fresh display on first poll
+    checkOTAUpdate();             // check GitHub for a newer firmware build
   } else {
     Serial.println("WiFi failed — will retry");
     showSplash("WIFI FAIL");
   }
 }
 
-void tryWebSocket() {
-  if (WiFi.status() != WL_CONNECTED) {
-    setState(STATE_WIFI_CONNECTING);
-    lastWifiAttempt = 0;
+// ── HTTP poll ────────────────────────────────────────
+// Fetches https://SERVER_HOST/current-bill and returns the bill string.
+// Returns "__ERROR__" on any failure so the display stays unchanged.
+String pollCurrentBill() {
+  WiFiClientSecure client;
+  client.setInsecure();  // skip cert verification — server cert is valid but ESP32 has no CA store
+  HTTPClient http;
+  String url = "https://";
+  url += SERVER_HOST;
+  url += "/current-bill";
+  if (!http.begin(client, url)) { http.end(); return "__ERROR__"; }
+  int code = http.GET();
+  if (code != 200) {
+    Serial.printf("HTTP poll failed: %d\n", code);
+    http.end();
+    return "__ERROR__";
+  }
+  String body = http.getString();
+  http.end();
+  // Response is {"bill":"B105"} or {"bill":""}
+  // Simple parse — no JSON library needed
+  int start = body.indexOf("\"bill\":\"") + 8;
+  int end   = body.indexOf("\"", start);
+  if (start < 8 || end < 0) return "__ERROR__";
+  return body.substring(start, end);
+}
+
+// ── OTA update check ─────────────────────────────────
+// Called once after WiFi connects.  Fetches version.txt from GitHub; if
+// the remote version differs from FIRMWARE_VERSION it downloads the binary
+// from the firmware-latest release and flashes it, then auto-restarts.
+void checkOTAUpdate() {
+  Serial.println("OTA: checking version at " OTA_VERSION_URL);
+
+  // Step 1 — fetch version.txt
+  WiFiClientSecure verClient;
+  verClient.setInsecure();
+  HTTPClient http;
+  if (!http.begin(verClient, OTA_VERSION_URL)) {
+    Serial.println("OTA: cannot reach version URL — skipping");
     return;
   }
-  if (millis() - lastWsAttempt < wsRetryDelay && lastWsAttempt != 0) return;
-  lastWsAttempt = millis();
-  Serial.println("Attempting server connection...");
-  showSplash("Connecting server...");
-  wsClient.close();
-  wsClient.onMessage(onMessage);
-  wsClient.onEvent(onEvent);
-  String url = "wss://"; url += SERVER_IP;  // Railway terminates TLS; no port needed
-  bool ok = wsClient.connect(url);
-  if (!ok) {
-    Serial.println("Connect call returned false");
-    setState(STATE_RETRY_WAIT);
-    wsRetryDelay = min((uint32_t)WS_RETRY_MAX_MS, wsRetryDelay * 2);
+  int code = http.GET();
+  if (code != 200) {
+    Serial.printf("OTA: version fetch failed (HTTP %d) — skipping\n", code);
+    http.end();
+    return;
+  }
+  String latest = http.getString();
+  http.end();
+  latest.trim();
+
+  Serial.println("OTA: local=" FIRMWARE_VERSION "  remote=" + latest);
+
+  if (latest == FIRMWARE_VERSION) {
+    Serial.println("OTA: firmware is up to date");
+    return;
+  }
+
+  // Step 2 — show update screen
+  oled.clearDisplay();
+  oled.setTextSize(1);
+  oled.setTextColor(SSD1306_WHITE);
+  oled.setCursor(2, 4);  oled.println("OTA UPDATING...");
+  oled.setCursor(2, 16); oled.print("v" FIRMWARE_VERSION " -> v"); oled.println(latest);
+  oled.display();
+  Serial.println("OTA: downloading firmware from " OTA_FIRMWARE_URL);
+
+  // Step 3 — download and flash
+  WiFiClientSecure fwClient;
+  fwClient.setInsecure();
+  httpUpdate.setLedPin(LED_PIN, LOW);
+  httpUpdate.rebootOnUpdate(true);   // auto-restart on success
+
+  t_httpUpdate_return ret = httpUpdate.update(fwClient, OTA_FIRMWARE_URL);
+
+  switch (ret) {
+    case HTTP_UPDATE_OK:
+      // rebootOnUpdate(true) means we never reach here — ESP32 restarts
+      break;
+    case HTTP_UPDATE_FAILED:
+      Serial.printf("OTA: failed — error %d: %s\n",
+        httpUpdate.getLastError(),
+        httpUpdate.getLastErrorString().c_str());
+      oled.clearDisplay();
+      oled.setTextSize(1);
+      oled.setTextColor(SSD1306_WHITE);
+      oled.setCursor(2, 8); oled.println("OTA FAILED");
+      oled.setCursor(2, 20); oled.println("resuming...");
+      oled.display();
+      delay(2000);   // brief pause so the message is readable
+      break;
+    case HTTP_UPDATE_NO_UPDATES:
+      Serial.println("OTA: server says no update");
+      break;
   }
 }
 
@@ -410,7 +427,6 @@ void setup() {
     Serial.println("OLED not found");
   }
   showSplash("KRIED KDS");
-  wsClient.addHeader("x-client-type", "esp32");
   WiFi.onEvent(onWiFiEvent);
   setState(STATE_WIFI_CONNECTING);
 }
@@ -420,73 +436,34 @@ void loop() {
   updateLED();
   updateFlip(); // runs animation steps non-blocking
 
-  switch (appState) {
-    case STATE_WIFI_CONNECTING:
-      tryWifi();
-      break;
-    case STATE_WS_CONNECTING:
-      if (timeInState() > WS_CONNECT_TIMEOUT) {
-        Serial.println("WS connect timeout");
-        setState(STATE_RETRY_WAIT);
-        wsRetryDelay = min((uint32_t)WS_RETRY_MAX_MS, wsRetryDelay * 2);
-      } else if (lastWsAttempt == 0) {
-        tryWebSocket();
-      } else {
-        wsClient.poll();
-      }
-      break;
-    case STATE_CONNECTED:
-      wsClient.poll();
-      if (millis() - lastTrafficAt > HEARTBEAT_TIMEOUT) {
-        Serial.println("Heartbeat timeout");
-        wsClient.close();
-        setState(STATE_RETRY_WAIT);
-      }
-      static uint32_t lastPing = 0;
-      if (millis() - lastPing > HEARTBEAT_INTERVAL) {
-        lastPing = millis();
-        wsClient.ping();
-      }
-      if (WiFi.status() != WL_CONNECTED) {
-        setState(STATE_WIFI_CONNECTING);
-        lastWifiAttempt = 0;
-      }
-      break;
-    case STATE_RETRY_WAIT:
-      if (timeInState() > wsRetryDelay) {
-        if (WiFi.status() == WL_CONNECTED) {
-          setState(STATE_WS_CONNECTING);
-          lastWsAttempt = 0;
-        } else {
-          setState(STATE_WIFI_CONNECTING);
-          lastWifiAttempt = 0;
-        }
-      }
-      break;
+  // WiFi watchdog
+  if (appState == STATE_WIFI_CONNECTING) {
+    tryWifi();
+    return;
+  }
+  if (WiFi.status() != WL_CONNECTED) {
+    setState(STATE_WIFI_CONNECTING);
+    lastWifiAttempt = 0;
+    return;
   }
 
-  // Display update — only apply when not mid-animation
+  // Poll server every UPDATE_INTERVAL ms (only when animation is idle)
   if (flipPhase == FLIP_IDLE && millis() - lastDisplayUpdate >= UPDATE_INTERVAL) {
     lastDisplayUpdate = millis();
-    if (appState == STATE_CONNECTED && (pendingUpdate || justConnected)) {
-      if (justConnected) {
-        justConnected = false;
-        pendingUpdate = false;
-        Serial.println("Reconnect refresh: " + (pendingBill == "" ? "WAITING" : pendingBill));
-        drawFinal(pendingBill);
-        currentBill = pendingBill;
-        setLedMode(LED_BLINK_FAST);
-      } else if (pendingBill != currentBill) {
-        pendingUpdate = false;
-        Serial.println("Bill changed: " + currentBill + " → " + pendingBill);
-        startFlip(currentBill == "__UNKNOWN__" ? "" : currentBill, pendingBill);
-        currentBill = pendingBill;
-        setLedMode(LED_BLINK_FAST);
-      } else {
-        // Same value re-sent — keep flag in case the screen is desynced; force a redraw.
-        pendingUpdate = false;
-        drawFinal(currentBill);
-      }
+
+    String fetched = pollCurrentBill();
+    if (fetched == "__ERROR__") {
+      Serial.println("Poll failed — retrying next interval");
+      return;
+    }
+
+    Serial.println("Poll OK — bill: '" + fetched + "'");
+
+    if (fetched != currentBill) {
+      Serial.println("Bill changed: " + currentBill + " → " + fetched);
+      startFlip(currentBill == "__UNKNOWN__" ? "" : currentBill, fetched);
+      currentBill = fetched;
+      setLedMode(LED_BLINK_FAST);
     }
   }
 }
