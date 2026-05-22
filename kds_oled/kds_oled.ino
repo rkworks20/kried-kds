@@ -7,13 +7,14 @@
 #include <Adafruit_SSD1306.h>
 
 // ── Config ───────────────────────────────────────────
-#include "credentials.h"   // WiFi credentials — gitignored, never pushed
-const char* SERVER_HOST = "kried-kds-production.up.railway.app";
+const char* WIFI_SSID     = "Airtel_Rk?s Wifi";
+const char* WIFI_PASSWORD = "wifi1234";
+const char* SERVER_HOST   = "kried-kds-production.up.railway.app";
 
 // ── OTA update ───────────────────────────────────────
 // Bump FIRMWARE_VERSION and kds_oled/version.txt together when you push new code.
 // GitHub Actions compiles and posts the binary; the ESP32 downloads it on next boot.
-#define FIRMWARE_VERSION  "1.0.4"
+#define FIRMWARE_VERSION  "1.0.5"
 // Both URLs served directly from GitHub — no CDN redirects
 #define OTA_VERSION_URL   "https://raw.githubusercontent.com/rkworks20/kried-kds/main/kds_oled/version.txt"
 #define OTA_FIRMWARE_URL  "https://raw.githubusercontent.com/rkworks20/kried-kds/main/firmware/firmware.bin"

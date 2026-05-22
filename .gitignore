@@ -2,4 +2,3 @@ node_modules/
 kds-state.json
 kds-state.json.backup
 .DS_Store
-kds_oled/credentials.h
