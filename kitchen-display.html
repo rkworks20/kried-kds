@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kitchen Display System</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0a;
+    --surface: #141414;
+    --surface2: #1e1e1e;
+    --border: #2a2a2a;
+    --burger-accent: #ff6b00;
+    --fries-accent: #f5c400;
+    --done-color: #22c55e;
+    --text-primary: #f0f0f0;
+    --text-muted: #666;
+    --font-display: 'Bebas Neue', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  body { background: var(--bg); color: var(--text-primary); font-family: var(--font-mono); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Header ── */
+  header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; gap: 16px; }
+  .header-title { font-family: var(--font-display); font-size: 22px; letter-spacing: 3px; }
+  .header-right { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+  .clock { font-size: 13px; color: var(--text-muted); letter-spacing: 1px; }
+  .queue-info { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .queue-info span { color: var(--text-primary); font-weight: 700; }
+  .header-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; padding: 6px 14px; cursor: pointer; transition: border-color 0.15s; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+  .header-btn:hover { border-color: #555; }
+
+  /* ── Columns dropdown ── */
+  .view-selector { position: relative; }
+  .view-btn-arrow { font-size: 8px; color: var(--text-muted); }
+  .view-dropdown { display: none; position: absolute; top: calc(100% + 6px); right: 0; background: var(--surface); border: 1px solid var(--border); min-width: 200px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.6); }
+  .view-dropdown.open { display: block; }
+  .view-dropdown-label { font-size: 9px; letter-spacing: 2px; color: var(--text-muted); padding: 10px 14px 6px; border-bottom: 1px solid var(--border); }
+  .view-option { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; transition: background 0.1s; font-size: 12px; letter-spacing: 1px; }
+  .view-option:hover { background: var(--surface2); }
+  .view-option-check { width: 14px; height: 14px; border: 1px solid var(--border); border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 9px; flex-shrink: 0; color: #000; }
+  .view-option.active .view-option-check { background: var(--text-primary); border-color: var(--text-primary); }
+
+  /* ── Stations layout ── */
+  .stations { display: grid; flex: 1; overflow: hidden; align-items: stretch; }
+  .station { padding: 24px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 16px; overflow: hidden; min-height: 0; }
+  .station:last-child { border-right: none; }
+  .station-header { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 14px; border-bottom: 2px solid var(--border); flex-shrink: 0; }
+  .station-name { font-family: var(--font-display); font-size: 36px; letter-spacing: 4px; }
+  .burger-station .station-name { color: var(--burger-accent); }
+  .fries-station  .station-name { color: var(--fries-accent); }
+  .station-meta { font-size: 11px; color: var(--text-muted); letter-spacing: 1px; text-align: right; line-height: 1.6; }
+  .station-meta .highlight { color: var(--text-primary); font-weight: 700; }
+
+  /* ── Batch grid ── */
+  .batch-grid { display: grid; gap: 10px; flex: 1; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3, 1fr); }
+  .item-card { background: var(--surface); border: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+  .item-card.new { animation: slideIn 0.2s ease; }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .item-card.empty { opacity: 0.15; border-style: dashed; }
+  .item-card.history-card { opacity: 0.5; }
+  .item-qty { font-family: var(--font-display); font-size: 48px; line-height: 1; letter-spacing: 2px; }
+  .burger-station .item-card:not(.empty):not(.history-card) .item-qty { color: var(--burger-accent); }
+  .fries-station  .item-card:not(.empty):not(.history-card) .item-qty  { color: var(--fries-accent); }
+  .item-card.empty .item-qty, .item-card.history-card .item-qty { color: var(--text-muted); }
+  .item-name { font-size: 13px; font-weight: 700; letter-spacing: 1px; color: var(--text-primary); text-transform: uppercase; line-height: 1.3; }
+  .item-card.empty .item-name { color: var(--border); }
+  .item-bills { font-size: 10px; color: var(--text-muted); letter-spacing: 0.5px; }
+
+  /* ── Station footer ── */
+  .station-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 14px; border-top: 1px solid var(--border); flex-shrink: 0; gap: 12px; height: 58px; }
+
+  .history-nav { display: flex; align-items: center; gap: 6px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .history-nav.visible { opacity: 1; pointer-events: all; }
+  .history-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); font-size: 11px; width: 26px; height: 26px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .history-btn:hover { border-color: #555; color: var(--text-primary); }
+  .history-btn:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+  .history-label { font-size: 10px; color: var(--text-muted); letter-spacing: 1px; white-space: nowrap; min-width: 60px; text-align: center; }
+
+  .completed-tag { font-family: var(--font-mono); font-size: 11px; letter-spacing: 2px; padding: 5px 10px; background: transparent; border: 1px solid var(--done-color); color: var(--done-color); display: none; align-items: center; justify-content: center; gap: 6px; }
+
+  /* ── BATCH DONE button ── */
+  .done-btn { font-family: var(--font-display); font-size: 20px; letter-spacing: 3px; padding: 12px 28px; border: none; cursor: pointer; position: relative; overflow: hidden; }
+  .burger-station .done-btn { background: var(--burger-accent); color: #000; }
+  .fries-station  .done-btn { background: var(--fries-accent); color: #000; }
+  .burger-station .done-btn:not(.loading):not(:disabled):hover { background: #ff8533; }
+  .fries-station  .done-btn:not(.loading):not(:disabled):hover { background: #ffd633; }
+  .done-btn:not(.loading):not(:disabled):active { transform: scale(0.97); }
+  .done-btn:disabled { background: var(--surface2); color: var(--text-muted); cursor: default; }
+  .burger-station .done-btn.loading { background: linear-gradient(to right, #3a3a3a var(--progress, 0%), var(--surface2) var(--progress, 0%)); pointer-events: none; color: var(--text-muted); }
+  .fries-station  .done-btn.loading { background: linear-gradient(to right, #3a3a3a var(--progress, 0%), var(--surface2) var(--progress, 0%)); pointer-events: none; color: var(--text-muted); }
+
+  /* ── Bills column ── */
+  .bills-column { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); border-left: 1px solid var(--border); }
+  .bills-header { padding: 14px 16px; border-bottom: 2px solid var(--border); flex-shrink: 0; }
+  .bills-title { font-family: var(--font-display); font-size: 28px; letter-spacing: 4px; color: var(--text-muted); }
+  .bills-scroll { flex: 1; overflow-y: auto; padding: 16px; display: grid; grid-template-columns: 1fr; align-content: start; gap: 16px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .bills-column.expanded .bills-scroll { grid-template-columns: repeat(4, 1fr); }
+  .no-bills { color: var(--text-muted); font-size: 11px; letter-spacing: 1px; text-align: center; padding: 40px 0; grid-column: 1 / -1; }
+
+  /* ── Bill card ── */
+  .bill-card { background: #1e1e1e; border: none; padding: 0; position: relative; animation: slideIn 0.2s ease; flex-shrink: 0; display: flex; flex-direction: column; }
+  .bill-card::before { content: ''; display: block; height: 10px; background: radial-gradient(circle at 5px 0, var(--bg) 5px, #1e1e1e 5px) repeat-x top / 10px 10px; }
+  .bill-card::after  { content: ''; display: block; height: 10px; background: radial-gradient(circle at 5px 10px, var(--bg) 5px, #1e1e1e 5px) repeat-x bottom / 10px 10px; }
+  .bill-inner { padding: 14px 20px 8px; flex: 1; display: flex; flex-direction: column; }
+  .bill-card .bill-items { flex: 1; }
+  .bill-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .bill-id { font-family: var(--font-display); font-size: 26px; letter-spacing: 2px; color: #c8c0b0; }
+  .bill-complete-check { font-size: 26px; color: var(--done-color); display: none; animation: popIn 0.3s ease; }
+  .bill-card.completed .bill-complete-check { display: block; }
+  @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.2); } 100% { transform: scale(1); opacity: 1; } }
+  .bill-items { display: flex; flex-direction: column; gap: 8px; }
+  .bill-item-row { display: flex; align-items: center; gap: 10px; font-size: 13px; letter-spacing: 0.5px; color: #888; }
+  .bill-item-row.done { color: var(--done-color); }
+  .bill-item-check { width: 18px; height: 18px; border: 1px solid #3a3a3a; border-radius: 2px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 11px; }
+  .bill-item-row.done .bill-item-check { background: var(--done-color); border-color: var(--done-color); color: #000; }
+  .bill-item-icon { font-size: 14px; flex-shrink: 0; line-height: 1; }
+  .bill-item-name { text-transform: uppercase; flex: 1; line-height: 1.4; color: #d0c8b8; font-size: 13px; }
+  .bill-item-qty  { font-weight: 700; color: #d0c8b8; flex-shrink: 0; font-size: 14px; }
+  .bill-item-row.done .bill-item-name, .bill-item-row.done .bill-item-qty { color: var(--done-color); }
+  .skip-btn {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 1px;
+    padding: 3px 7px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .skip-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: var(--skip-progress, 0%);
+    background: #ef4444;
+    transition: none;
+    pointer-events: none;
+  }
+  .skip-btn.holding { border-color: #ef4444; color: #fff; }
+  .skip-btn .skip-label { position: relative; z-index: 1; }
+  .bill-divider { border: none; border-top: 1px dashed #3a3a3a; margin: 10px 0; }
+  .deliver-btn { margin-top: 0; width: 100%; font-family: var(--font-display); font-size: 16px; letter-spacing: 2px; padding: 10px 0; border: 1px dashed #3a3a3a; background: transparent; color: #555; cursor: default; transition: all 0.15s; margin-bottom: 4px; }
+  .bill-card.completed .deliver-btn { background: var(--done-color); border: none; color: #000; cursor: pointer; }
+  .bill-card.completed .deliver-btn:hover  { background: #16a34a; }
+  .bill-card.completed .deliver-btn:active { transform: scale(0.98); }
+  .on-display-tag { display: none; font-size: 10px; letter-spacing: 1px; padding: 3px 7px; border: 1px solid var(--fries-accent); color: var(--fries-accent); font-family: var(--font-mono); gap: 4px; align-items: center; }
+  .bill-card.completed .on-display-tag { display: inline-flex; }
+  .display-timer { font-size: 10px; color: inherit; font-family: var(--font-mono); letter-spacing: 1px; }
+  .waiting-tag { border-color: var(--text-muted) !important; color: var(--text-muted) !important; }
+  @keyframes nudge { 0% { transform: translateX(0); } 20% { transform: translateX(-3px); } 40% { transform: translateX(3px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } 100% { transform: translateX(0); } }
+  .on-display-tag.nudge { animation: nudge 0.3s ease; }
+
+  /* ── Settings Modal ── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border: 1px solid var(--border); width: 680px; height: 560px; display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(0,0,0,0.8); }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .modal-title { font-family: var(--font-display); font-size: 28px; letter-spacing: 4px; }
+  .modal-close { background: none; border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; padding: 6px 12px; cursor: pointer; transition: all 0.15s; letter-spacing: 1px; }
+  .modal-close:hover { border-color: #555; color: var(--text-primary); }
+  .modal-body { display: flex; flex: 1; overflow: hidden; }
+  .modal-nav { width: 160px; border-right: 1px solid var(--border); flex-shrink: 0; padding: 12px 0; }
+  .modal-nav-item { padding: 10px 20px; font-size: 11px; letter-spacing: 1px; color: var(--text-muted); cursor: pointer; transition: all 0.1s; border-left: 2px solid transparent; }
+  .modal-nav-item:hover { color: var(--text-primary); background: var(--surface2); }
+  .modal-nav-item.active { color: var(--text-primary); border-left-color: var(--text-primary); background: var(--surface2); }
+  .modal-content { flex: 1; overflow-y: auto; padding: 24px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .settings-panel { display: none; }
+  .settings-panel.active { display: block; }
+  .settings-section-title { font-family: var(--font-display); font-size: 18px; letter-spacing: 3px; color: var(--text-muted); margin-bottom: 20px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .settings-group { margin-bottom: 24px; }
+  .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); gap: 16px; }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-label { font-size: 12px; letter-spacing: 0.5px; color: var(--text-primary); flex: 1; }
+  .settings-desc { font-size: 10px; color: var(--text-muted); margin-top: 3px; letter-spacing: 0.3px; }
+  .settings-control { flex-shrink: 0; }
+  .s-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text-primary); font-family: var(--font-mono); font-size: 13px; padding: 6px 10px; width: 70px; text-align: center; transition: border-color 0.15s; }
+  .s-input:focus { outline: none; border-color: #555; }
+  .s-input-wide { width: 160px; text-align: left; }
+  .s-toggle { width: 40px; height: 22px; background: var(--border); border-radius: 11px; position: relative; cursor: pointer; transition: background 0.2s; border: none; flex-shrink: 0; }
+  .s-toggle::after { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #555; top: 3px; left: 3px; transition: all 0.2s; }
+  .s-toggle.on { background: var(--done-color); }
+  .s-toggle.on::after { left: 21px; background: #000; }
+  .s-select { background: var(--surface2); border: 1px solid var(--border); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; padding: 6px 10px; cursor: pointer; letter-spacing: 0.5px; }
+  .s-select:focus { outline: none; border-color: #555; }
+  .s-color { width: 36px; height: 28px; border: 1px solid var(--border); padding: 2px; background: var(--surface2); cursor: pointer; }
+  .s-stepper { display: flex; align-items: center; }
+  .s-stepper button { background: var(--surface2); border: 1px solid var(--border); color: var(--text-primary); font-family: var(--font-mono); font-size: 14px; width: 28px; height: 32px; cursor: pointer; transition: background 0.1s; display: flex; align-items: center; justify-content: center; }
+  .s-stepper button:hover { background: #333; }
+  .s-stepper span { background: var(--surface2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); color: var(--text-primary); font-size: 13px; width: 44px; height: 32px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; flex-shrink: 0; }
+  .btn-save { font-family: var(--font-display); font-size: 16px; letter-spacing: 2px; padding: 10px 28px; background: var(--text-primary); color: #000; border: none; cursor: pointer; transition: opacity 0.15s; }
+  .btn-save:hover { opacity: 0.85; }
+  .btn-cancel { font-family: var(--font-display); font-size: 16px; letter-spacing: 2px; padding: 10px 20px; background: transparent; color: var(--text-muted); border: 1px solid var(--border); cursor: pointer; transition: all 0.15s; }
+  .btn-cancel:hover { border-color: #555; color: var(--text-primary); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-title" id="header-title">KDS — KRIED KITCHEN</div>
+  <div class="header-right">
+    <div class="queue-info">BURGERS: <span id="burger-queue-count">0</span></div>
+    <div class="queue-info">FRIES: <span id="fries-queue-count">0</span></div>
+    <div class="clock" id="clock">--:--:--</div>
+    <button class="header-btn" id="simulate-btn" onclick="addRandomOrder()">+ SIMULATE ORDER</button>
+    <div class="view-selector" id="view-selector">
+      <button class="header-btn" onclick="toggleDropdown()">COLUMNS <span class="view-btn-arrow">▼</span></button>
+      <div class="view-dropdown" id="view-dropdown">
+        <div class="view-dropdown-label">SHOW COLUMNS</div>
+        <div class="view-option active" id="opt-burger" onclick="toggleColumn('burger')"><div class="view-option-check">✓</div><span>BURGERS</span></div>
+        <div class="view-option active" id="opt-fries"  onclick="toggleColumn('fries')"><div class="view-option-check">✓</div><span>FRIES &amp; STRIPS</span></div>
+        <div class="view-option active" id="opt-bills"  onclick="toggleColumn('bills')"><div class="view-option-check">✓</div><span>BILLS</span></div>
+      </div>
+    </div>
+    <button class="header-btn" onclick="openSettings()">⚙ SETTINGS</button>
+  </div>
+</header>
+
+<div class="stations" id="stations">
+  <div class="station burger-station" id="col-burger">
+    <div class="station-header">
+      <div class="station-name" id="burger-station-name">BURGERS</div>
+      <div class="station-meta">CAPACITY <span class="highlight" id="burger-cap-display">6</span> / BATCH</div>
+    </div>
+    <div class="batch-grid" id="burger-grid"></div>
+    <div class="station-footer">
+      <div class="history-nav" id="burger-history-nav">
+        <button class="history-btn" id="burger-prev-btn" onclick="browseHistory('burger', -1)">◀</button>
+        <span class="history-label" id="burger-history-label"></span>
+        <button class="history-btn" id="burger-next-btn" onclick="browseHistory('burger', 1)">▶</button>
+      </div>
+      <button class="done-btn" id="burger-done-btn" onclick="markDone('burger')">BATCH DONE</button>
+    </div>
+  </div>
+
+  <div class="station fries-station" id="col-fries">
+    <div class="station-header">
+      <div class="station-name" id="fries-station-name">FRIES &amp; STRIPS</div>
+      <div class="station-meta">CAPACITY <span class="highlight" id="fries-cap-display">4</span> / BATCH</div>
+    </div>
+    <div class="batch-grid" id="fries-grid"></div>
+    <div class="station-footer">
+      <div class="history-nav" id="fries-history-nav">
+        <button class="history-btn" id="fries-prev-btn" onclick="browseHistory('fries', -1)">◀</button>
+        <span class="history-label" id="fries-history-label"></span>
+        <button class="history-btn" id="fries-next-btn" onclick="browseHistory('fries', 1)">▶</button>
+      </div>
+      <button class="done-btn" id="fries-done-btn" onclick="markDone('fries')">BATCH DONE</button>
+    </div>
+  </div>
+
+  <div class="bills-column" id="col-bills">
+    <div class="bills-header"><div class="bills-title">BILLS</div></div>
+    <div class="bills-scroll" id="bills-scroll"></div>
+  </div>
+</div>
+
+<!-- Reconnecting overlay -->
+<div id="ws-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+  <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;color:#f0f0f0;">RECONNECTING</div>
+  <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#666;letter-spacing:1px;">Connecting to server...</div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settings-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">SETTINGS</div>
+      <button class="modal-close" onclick="closeSettings()">✕ CLOSE</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-nav">
+        <div class="modal-nav-item active" onclick="switchTab(event,'general')">GENERAL</div>
+        <div class="modal-nav-item" onclick="switchTab(event,'stations')">STATIONS</div>
+        <div class="modal-nav-item" onclick="switchTab(event,'display')">DISPLAY</div>
+        <div class="modal-nav-item" onclick="switchTab(event,'timers')">TIMERS</div>
+        <div class="modal-nav-item" onclick="switchTab(event,'columns')">COLUMNS</div>
+        <div class="modal-nav-item" onclick="switchTab(event,'appearance')">APPEARANCE</div>
+      </div>
+      <div class="modal-content">
+        <div class="settings-panel active" id="panel-general">
+          <div class="settings-section-title">GENERAL</div>
+          <div class="settings-group">
+            <div class="settings-row"><div><div class="settings-label">Outlet Name</div><div class="settings-desc">Shown in the header</div></div><div class="settings-control"><input class="s-input s-input-wide" id="s-outlet-name" value="KRIED KITCHEN"></div></div>
+            <div class="settings-row"><div><div class="settings-label">Clock Format</div></div><div class="settings-control"><select class="s-select" id="s-clock-format"><option value="24">24H</option><option value="12">12H</option></select></div></div>
+            <div class="settings-row"><div><div class="settings-label">Simulate Orders Button</div><div class="settings-desc">Show the simulate button in header</div></div><div class="settings-control"><button class="s-toggle on" id="s-show-simulate" onclick="toggleSetting('s-show-simulate')"></button></div></div>
+            <div class="settings-row"><div><div class="settings-label">Sound Alerts</div><div class="settings-desc">Beep when a batch is ready</div></div><div class="settings-control"><button class="s-toggle" id="s-sound" onclick="toggleSetting('s-sound')"></button></div></div>
+          </div>
+        </div>
+        <div class="settings-panel" id="panel-stations">
+          <div class="settings-section-title">STATIONS</div>
+          <div class="settings-group">
+            <div class="settings-row"><div><div class="settings-label">Burger Station Name</div></div><div class="settings-control"><input class="s-input s-input-wide" id="s-burger-name" value="BURGERS"></div></div>
+            <div class="settings-row"><div><div class="settings-label">Burger Batch Capacity</div><div class="settings-desc">Max burgers per batch</div></div><div class="settings-control"><div class="s-stepper"><button onclick="stepValue('s-burger-cap',-1,1,20)">−</button><span id="s-burger-cap">6</span><button onclick="stepValue('s-burger-cap',1,1,20)">+</button></div></div></div>
+            <div class="settings-row"><div><div class="settings-label">Fries Station Name</div></div><div class="settings-control"><input class="s-input s-input-wide" id="s-fries-name" value="FRIES &amp; STRIPS"></div></div>
+            <div class="settings-row"><div><div class="settings-label">Fries Batch Capacity</div><div class="settings-desc">Max fries/strips per batch</div></div><div class="settings-control"><div class="s-stepper"><button onclick="stepValue('s-fries-cap',-1,1,20)">−</button><span id="s-fries-cap">4</span><button onclick="stepValue('s-fries-cap',1,1,20)">+</button></div></div></div>
+            <div class="settings-row"><div><div class="settings-label">Show Bill IDs on Cards</div><div class="settings-desc">Show which bills each batch item belongs to</div></div><div class="settings-control"><button class="s-toggle on" id="s-show-bill-ids" onclick="toggleSetting('s-show-bill-ids')"></button></div></div>
+            <div class="settings-row"><div><div class="settings-label">Show Empty Slots</div><div class="settings-desc">Show dashed empty cards when batch isn't full</div></div><div class="settings-control"><button class="s-toggle on" id="s-show-empty" onclick="toggleSetting('s-show-empty')"></button></div></div>
+          </div>
+        </div>
+        <div class="settings-panel" id="panel-display">
+          <div class="settings-section-title">LED DISPLAY</div>
+          <div class="settings-group">
+            <div class="settings-row"><div><div class="settings-label">Max Bills on Display</div><div class="settings-desc">Max bills shown on the LED board at once</div></div><div class="settings-control"><div class="s-stepper"><button onclick="stepValue('s-display-cap',-1,1,20)">−</button><span id="s-display-cap">5</span><button onclick="stepValue('s-display-cap',1,1,20)">+</button></div></div></div>
+            <div class="settings-row"><div><div class="settings-label">Bills Column Width</div><div class="settings-desc">Sidebar width in pixels</div></div><div class="settings-control"><div class="s-stepper"><button onclick="stepValue('s-bills-width',-20,200,600)">−</button><span id="s-bills-width">380</span><button onclick="stepValue('s-bills-width',20,200,600)">+</button></div></div></div>
+            <div class="settings-row"><div><div class="settings-label">Show Item Icons</div><div class="settings-desc">Show 🍔🍟🍗 icons in bill cards</div></div><div class="settings-control"><button class="s-toggle on" id="s-show-icons" onclick="toggleSetting('s-show-icons')"></button></div></div>
+          </div>
+        </div>
+        <div class="settings-panel" id="panel-timers">
+          <div class="settings-section-title">TIMERS &amp; ALERTS</div>
+          <div class="settings-group">
+            <div class="settings-row"><div><div class="settings-label">Orange Alert Threshold</div><div class="settings-desc">Seconds before ON DISPLAY tag turns orange</div></div><div class="settings-control"><div class="s-stepper"><button onclick="stepValue('s-orange-thresh',-10,10,600)">−</button><span id="s-orange-thresh">60</span><button onclick="stepValue('s-orange-thresh',10,10,600)">+</button></div></div></div>
+            <div class="settings-row"><div><div class="settings-label">Red Alert Threshold</div><div class="settings-desc">Seconds before ON DISPLAY tag turns red</div></div><div class="settings-control"><div class="s-stepper"><button onclick="stepValue('s-red-thresh',-10,10,600)">−</button><span id="s-red-thresh">120</span><button onclick="stepValue('s-red-thresh',10,10,600)">+</button></div></div></div>
+            <div class="settings-row"><div><div class="settings-label">Nudge Interval</div><div class="settings-desc">Seconds between shake nudges on orange tag</div></div><div class="settings-control"><div class="s-stepper"><button onclick="stepValue('s-nudge-interval',-1,1,30)">−</button><span id="s-nudge-interval">2</span><button onclick="stepValue('s-nudge-interval',1,1,30)">+</button></div></div></div>
+            <div class="settings-row"><div><div class="settings-label">Show Timer on Bills</div><div class="settings-desc">Show running timer when bill is on display</div></div><div class="settings-control"><button class="s-toggle on" id="s-show-timer" onclick="toggleSetting('s-show-timer')"></button></div></div>
+          </div>
+        </div>
+        <div class="settings-panel" id="panel-columns">
+          <div class="settings-section-title">COLUMN VISIBILITY</div>
+          <div class="settings-group">
+            <div class="settings-row"><div><div class="settings-label">Burger Station</div></div><div class="settings-control"><button class="s-toggle on" id="s-col-burger" onclick="toggleSetting('s-col-burger')"></button></div></div>
+            <div class="settings-row"><div><div class="settings-label">Fries &amp; Strips Station</div></div><div class="settings-control"><button class="s-toggle on" id="s-col-fries" onclick="toggleSetting('s-col-fries')"></button></div></div>
+            <div class="settings-row"><div><div class="settings-label">Bills Panel</div></div><div class="settings-control"><button class="s-toggle on" id="s-col-bills" onclick="toggleSetting('s-col-bills')"></button></div></div>
+          </div>
+        </div>
+        <div class="settings-panel" id="panel-appearance">
+          <div class="settings-section-title">APPEARANCE</div>
+          <div class="settings-group">
+            <div class="settings-row"><div><div class="settings-label">Burger Accent Color</div></div><div class="settings-control"><input type="color" class="s-color" id="s-burger-color" value="#ff6b00"></div></div>
+            <div class="settings-row"><div><div class="settings-label">Fries Accent Color</div></div><div class="settings-control"><input type="color" class="s-color" id="s-fries-color" value="#f5c400"></div></div>
+            <div class="settings-row"><div><div class="settings-label">Done Color</div></div><div class="settings-control"><input type="color" class="s-color" id="s-done-color" value="#22c55e"></div></div>
+            <div class="settings-row"><div><div class="settings-label">Item Card Qty Font Size</div><div class="settings-desc">Qty number size on batch cards</div></div><div class="settings-control"><div class="s-stepper"><button onclick="stepValue('s-qty-size',-4,24,96)">−</button><span id="s-qty-size">48</span><button onclick="stepValue('s-qty-size',4,24,96)">+</button></div></div></div>
+            <div class="settings-row"><div><div class="settings-label">Header Background</div></div><div class="settings-control"><input type="color" class="s-color" id="s-header-color" value="#141414"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeSettings()">CANCEL</button>
+      <button class="btn-save" onclick="saveSettings()">SAVE SETTINGS</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Config ──
+let BURGER_CAPACITY  = 6;
+let FRIES_CAPACITY   = 4;
+let DISPLAY_CAPACITY = 5;
+let ORANGE_THRESH    = 60;
+let RED_THRESH       = 120;
+let NUDGE_INTERVAL   = 2;
+let BILLS_WIDTH      = 380;
+let SHOW_ICONS       = true;
+let SHOW_TIMER       = true;
+let SHOW_BILL_IDS    = true;
+let SHOW_EMPTY       = true;
+let CLOCK_FORMAT     = '24';
+
+const BURGER_ITEMS = ['Nice Guy','Player','Guntur Kaaram','Hot Gochujang','Bhoot Jolokia'];
+const FRIES_ITEMS  = ['Classic Salted Fries','Spicy Salt Fries','Player Fries','Kimchi Dust Fries','Classic Salted Strips','Spicy Salt Strips','Player Strips','Kimchi Dust Strips','Hot Gochujang Strips','Bhoot Jolokia Strips'];
+const ITEM_ICONS   = { burger: '🍔', fries: '🍟', strips: '🍗' };
+
+// ── State ──
+let billCounter = 1;
+let burgerQueue = [];
+let friesQueue  = [];
+const billsMap  = {};
+const visibleCols = { burger: true, fries: true, bills: true };
+const batchHistory = { burger: [], fries: [] };
+const historyIndex = { burger: -1, fries: -1 };
+const batchCooldownTimers = { burger: null, fries: null };
+
+// ── WebSocket sync ──
+let ws = null;
+let wsReconnectTimer = null;
+
+function getState() {
+  return { burgerQueue: burgerQueue.map(i=>({...i})), friesQueue: friesQueue.map(i=>({...i})), billsMap: JSON.parse(JSON.stringify(billsMap)), billCounter };
+}
+
+function applyState(state) {
+  burgerQueue = state.burgerQueue;
+  friesQueue  = state.friesQueue;
+  billCounter = state.billCounter;
+  Object.keys(billsMap).forEach(k => delete billsMap[k]);
+  Object.assign(billsMap, state.billsMap);
+  render();
+}
+
+function wsConnect() {
+  // Only connect if opened via a server, not as a local file
+  if (!location.host) {
+    console.warn('KDS: Running as local file — WebSocket sync disabled. Run server.js and open via http://localhost:3000 for multi-device sync.');
+    document.getElementById('ws-overlay').style.display = 'none';
+    return;
+  }
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${protocol}://${location.host}`);
+
+  ws.onopen = () => {
+    document.getElementById('ws-overlay').style.display = 'none';
+    ws.send(JSON.stringify({ type: 'request_state' }));
+  };
+
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'state') applyState(msg.payload);
+  };
+
+  ws.onclose = () => {
+    document.getElementById('ws-overlay').style.display = 'flex';
+    wsReconnectTimer = setTimeout(wsConnect, 2000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+function broadcast() {
+  if (ws && ws.readyState === WebSocket.OPEN)
+    ws.send(JSON.stringify({ type: 'state', payload: getState() }));
+}
+
+wsConnect();
+
+// ── Helpers ──
+function getItemIcon(name) {
+  if (BURGER_ITEMS.includes(name)) return ITEM_ICONS.burger;
+  if (name.toLowerCase().includes('strips')) return ITEM_ICONS.strips;
+  return ITEM_ICONS.fries;
+}
+
+function getBatch(queue, capacity) {
+  const grouped = {};
+  for (const item of queue) {
+    if (!grouped[item.name]) grouped[item.name] = [];
+    grouped[item.name].push(item);
+  }
+  const sorted = Object.entries(grouped).sort((a,b) =>
+    Math.min(...a[1].map(x=>x.timestamp)) - Math.min(...b[1].map(x=>x.timestamp))
+  );
+  const batch = []; let slots = capacity;
+  for (const [name, items] of sorted) {
+    if (slots <= 0) break;
+    const take = Math.min(items.length, slots);
+    batch.push({ name, items: items.slice(0, take) });
+    slots -= take;
+  }
+  return batch;
+}
+
+// ── Cooldown ──
+function startBatchCooldown(station) {
+  const btn = document.getElementById(`${station}-done-btn`);
+  if (!btn) return;
+
+  const hasBatch = getBatch(
+    station === 'burger' ? burgerQueue : friesQueue,
+    station === 'burger' ? BURGER_CAPACITY : FRIES_CAPACITY
+  ).length > 0;
+  if (!hasBatch) { btn.disabled = true; return; }
+
+  if (batchCooldownTimers[station]) {
+    cancelAnimationFrame(batchCooldownTimers[station].raf);
+    clearTimeout(batchCooldownTimers[station].timeout);
+  }
+
+  btn.disabled = false;
+  btn.style.pointerEvents = 'none';
+  btn.classList.add('loading');
+  btn.style.setProperty('--progress', '0%');
+
+  const duration = 5000;
+  const start = performance.now();
+
+  function tick(now) {
+    const pct = Math.min(100, ((now - start) / duration) * 100);
+    btn.style.setProperty('--progress', pct + '%');
+    if (pct < 100) batchCooldownTimers[station].raf = requestAnimationFrame(tick);
+  }
+
+  batchCooldownTimers[station] = {
+    raf: requestAnimationFrame(tick),
+    timeout: setTimeout(() => {
+      btn.classList.remove('loading');
+      btn.style.removeProperty('--progress');
+      btn.style.removeProperty('pointer-events');
+      const still = getBatch(station === 'burger' ? burgerQueue : friesQueue, station === 'burger' ? BURGER_CAPACITY : FRIES_CAPACITY).length > 0;
+      btn.disabled = !still;
+    }, duration)
+  };
+}
+
+function cancelCooldown(station) {
+  if (batchCooldownTimers[station]) {
+    cancelAnimationFrame(batchCooldownTimers[station].raf);
+    clearTimeout(batchCooldownTimers[station].timeout);
+    batchCooldownTimers[station] = null;
+  }
+  const btn = document.getElementById(`${station}-done-btn`);
+  btn.classList.remove('loading');
+  btn.style.removeProperty('--progress');
+  btn.style.removeProperty('pointer-events');
+}
+
+// ── Mark Done ──
+function markDone(station) {
+  const queue = station === 'burger' ? burgerQueue : friesQueue;
+  const cap   = station === 'burger' ? BURGER_CAPACITY : FRIES_CAPACITY;
+  const batch = getBatch(queue, cap);
+  if (batch.length === 0) return;
+
+  const snapshot = batch.map(({ name, items }) => ({
+    name, qty: items.length, bills: [...new Set(items.map(i=>i.billId))].join(' · ')
+  }));
+  batchHistory[station].push({ items: snapshot });
+
+  batch.forEach(({ name, items }) => {
+    const perBill = {};
+    items.forEach(item => { perBill[item.billId] = (perBill[item.billId] || 0) + 1; });
+    items.forEach(item => {
+      const idx = queue.findIndex(q => q.name === item.name && q.billId === item.billId);
+      if (idx !== -1) queue.splice(idx, 1);
+    });
+    Object.entries(perBill).forEach(([billId, clearedQty]) => {
+      const bill = billsMap[billId];
+      if (!bill) return;
+      const row = bill.items.find(i => i.name === name);
+      if (row) { row.doneSoFar = (row.doneSoFar||0) + clearedQty; if (row.doneSoFar >= row.qty) row.done = true; }
+    });
+  });
+
+  render();
+  broadcast();
+}
+
+// ── History ──
+function browseHistory(station, dir) {
+  const history = batchHistory[station];
+  if (history.length === 0) return;
+  let idx = historyIndex[station];
+  if (idx === -1) idx = history.length;
+  idx = Math.max(0, Math.min(history.length - 1, idx + dir));
+  historyIndex[station] = idx;
+  renderHistoryGrid(station, idx);
+  updateHistoryNav(station);
+}
+
+function exitHistory(station) {
+  historyIndex[station] = -1;
+  const footer = document.getElementById(`${station}-history-nav`).closest('.station-footer');
+  const tag = footer.querySelector('.completed-tag');
+  const btn = document.getElementById(`${station}-done-btn`);
+  if (tag) tag.style.display = 'none';
+  btn.style.display = '';
+  renderGrid(station, station === 'burger' ? BURGER_CAPACITY : FRIES_CAPACITY);
+  updateHistoryNav(station);
+  startBatchCooldown(station);
+}
+
+function renderHistoryGrid(station, idx) {
+  const entry = batchHistory[station][idx];
+  const cap   = station === 'burger' ? BURGER_CAPACITY : FRIES_CAPACITY;
+  const grid  = document.getElementById(`${station}-grid`);
+  grid.innerHTML = '';
+
+  entry.items.forEach(({ name, qty, bills }) => {
+    const card = document.createElement('div');
+    card.className = 'item-card history-card';
+    card.innerHTML = `<div class="item-qty">${qty}</div><div class="item-name">${name}</div>${SHOW_BILL_IDS && bills ? `<div class="item-bills">${bills}</div>` : ''}`;
+    grid.appendChild(card);
+  });
+
+  // Fill remaining slots
+  const totalSlots = Math.max(cap, 6);
+  for (let i = entry.items.length; i < totalSlots; i++) {
+    const card = document.createElement('div');
+    card.className = 'item-card empty';
+    card.innerHTML = `<div class="item-qty">—</div><div class="item-name">EMPTY</div>`;
+    grid.appendChild(card);
+  }
+
+  // Show completed tag, hide button
+  const btn = document.getElementById(`${station}-done-btn`);
+  btn.style.display = 'none';
+  const footer = btn.parentElement;
+  let tag = footer.querySelector('.completed-tag');
+  if (!tag) { tag = document.createElement('div'); tag.className = 'completed-tag'; footer.appendChild(tag); }
+  tag.textContent = '✓ COMPLETED';
+  tag.style.display = 'flex';
+}
+
+function updateHistoryNav(station) {
+  const history  = batchHistory[station];
+  const idx      = historyIndex[station];
+  const nav      = document.getElementById(`${station}-history-nav`);
+  const label    = document.getElementById(`${station}-history-label`);
+  const prevBtn  = document.getElementById(`${station}-prev-btn`);
+  const nextBtn  = document.getElementById(`${station}-next-btn`);
+  const doneBtn  = document.getElementById(`${station}-done-btn`);
+
+  if (history.length === 0) { nav.classList.remove('visible'); return; }
+  nav.classList.add('visible');
+
+  if (idx === -1) {
+    label.textContent = `${history.length} BATCH${history.length > 1 ? 'ES' : ''}`;
+    prevBtn.disabled = false;
+    nextBtn.disabled = true;
+    nextBtn.onclick  = () => browseHistory(station, 1);
+    prevBtn.onclick  = () => browseHistory(station, -1);
+  } else {
+    label.textContent = `${idx + 1} / ${history.length}`;
+    prevBtn.disabled = idx === 0;
+    nextBtn.disabled = false;
+    prevBtn.onclick  = () => browseHistory(station, -1);
+    nextBtn.onclick  = idx === history.length - 1 ? () => exitHistory(station) : () => browseHistory(station, 1);
+  }
+
+  // Sync done button disabled state (only when in live view and not loading)
+  if (idx === -1 && !doneBtn.classList.contains('loading')) {
+    doneBtn.disabled = getBatch(station === 'burger' ? burgerQueue : friesQueue, station === 'burger' ? BURGER_CAPACITY : FRIES_CAPACITY).length === 0;
+  }
+}
+
+// ── Render Grid ──
+function renderGrid(station, capacity) {
+  const queue = station === 'burger' ? burgerQueue : friesQueue;
+  const batch = getBatch(queue, capacity);
+  const grid  = document.getElementById(`${station}-grid`);
+
+  const newCards = [];
+  batch.forEach(({ name, items }) => {
+    const billIds = [...new Set(items.map(i=>i.billId))];
+    newCards.push({ key: name, qty: items.length, name, bills: billIds.join(' · '), empty: false });
+  });
+  const usedSlots = batch.reduce((sum, b) => sum + b.items.length, 0);
+  if (SHOW_EMPTY) {
+    for (let i = usedSlots; i < Math.max(capacity, 6); i++) newCards.push({ key: `empty-${i}`, empty: true });
+  }
+
+  const prevKeys = Array.from(grid.children).map(c => c.dataset.key).join(',');
+  const newKeys  = newCards.map(c => c.key).join(',');
+  const hasBatch = newCards.some(c => !c.empty);
+
+  // Update in-place or rebuild
+  const existing = Array.from(grid.children);
+  if (existing.length === newCards.length) {
+    newCards.forEach((data, i) => {
+      const card = existing[i];
+      if (card.dataset.key !== data.key) {
+        card.dataset.key = data.key;
+        card.className = 'item-card' + (data.empty ? ' empty new' : ' new');
+        card.innerHTML = data.empty
+          ? `<div class="item-qty">—</div><div class="item-name">EMPTY</div>`
+          : `<div class="item-qty">${data.qty}</div><div class="item-name">${data.name}</div>${SHOW_BILL_IDS ? `<div class="item-bills">${data.bills}</div>` : ''}`;
+        card.addEventListener('animationend', () => card.classList.remove('new'), { once: true });
+      } else if (!data.empty) {
+        card.querySelector('.item-qty').textContent = data.qty;
+        if (SHOW_BILL_IDS) { const b = card.querySelector('.item-bills'); if (b) b.textContent = data.bills; }
+      }
+    });
+  } else {
+    grid.innerHTML = '';
+    newCards.forEach(data => {
+      const card = document.createElement('div');
+      card.className = 'item-card' + (data.empty ? ' empty' : '');
+      card.dataset.key = data.key;
+      card.innerHTML = data.empty
+        ? `<div class="item-qty">—</div><div class="item-name">EMPTY</div>`
+        : `<div class="item-qty">${data.qty}</div><div class="item-name">${data.name}</div>${SHOW_BILL_IDS ? `<div class="item-bills">${data.bills}</div>` : ''}`;
+      grid.appendChild(card);
+    });
+  }
+
+  // Handle button / cooldown
+  if (!hasBatch) {
+    cancelCooldown(station);
+    document.getElementById(`${station}-done-btn`).disabled = true;
+  } else if (newKeys !== prevKeys) {
+    startBatchCooldown(station);
+  }
+}
+
+// ── Render Bills ──
+function createBillCard(bill) {
+  const card = document.createElement('div');
+  card.dataset.billId = bill.id;
+  card.className = 'bill-card';
+
+  card.innerHTML = `
+    <div class="bill-inner">
+      <div class="bill-card-header">
+        <div class="bill-id">${bill.id}</div>
+        <div class="bill-header-right" style="display:flex;align-items:center;gap:6px;">
+          <span class="on-display-tag" style="display:none;"></span>
+          <div class="bill-complete-check">✓</div>
+          <button class="skip-btn"
+            onmousedown="startSkip(event,'${bill.id}')"
+            onmouseup="cancelSkip(event)"
+            onmouseleave="cancelSkip(event)"
+            ontouchstart="startSkip(event,'${bill.id}')"
+            ontouchend="cancelSkip(event)"><span class="skip-label">SKIP</span></button>
+        </div>
+      </div>
+      <div class="bill-items"></div>
+      <hr class="bill-divider">
+      <button class="deliver-btn" onclick="advanceBill('${bill.id}')" disabled>DELIVERED</button>
+    </div>`;
+
+  // Build item rows once on creation
+  const itemsEl = card.querySelector('.bill-items');
+  bill.items.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'bill-item-row';
+    row.dataset.itemName = item.name;
+    row.innerHTML = `
+      <div class="bill-item-check"></div>
+      ${SHOW_ICONS ? `<span class="bill-item-icon">${getItemIcon(item.name)}</span>` : ''}
+      <div class="bill-item-name">${item.name}</div>
+      <div class="bill-item-qty">×${item.qty}</div>`;
+    itemsEl.appendChild(row);
+  });
+
+  return card;
+}
+
+function updateBillCard(card, bill) {
+  const allDone       = bill.items.every(i => i.done);
+  const showOnDisplay = !!bill.onDisplay;
+
+  // Card class
+  const wantClass = 'bill-card' + (allDone ? ' completed' : '');
+  if (card.className !== wantClass) card.className = wantClass;
+
+  // Item rows — only toggle done class and check text
+  bill.items.forEach(item => {
+    const row = card.querySelector(`[data-item-name="${CSS.escape(item.name)}"]`);
+    if (!row) return;
+    const isDone = !!item.done;
+    if (isDone && !row.classList.contains('done')) {
+      row.classList.add('done');
+      row.querySelector('.bill-item-check').textContent = '✓';
+    }
+  });
+
+  // Deliver button
+  const btn = card.querySelector('.deliver-btn');
+  const wantDisabled = !showOnDisplay;
+  if (btn.disabled !== wantDisabled) btn.disabled = wantDisabled;
+
+  // ON DISPLAY tag — update only when state changes
+  const tagEl = card.querySelector('.on-display-tag');
+  if (allDone && showOnDisplay) {
+    tagEl.classList.remove('waiting-tag');
+    // Only rebuild inner content if timer span isn't already there
+    if (!tagEl.querySelector('.display-timer') && SHOW_TIMER) {
+      tagEl.innerHTML = `ON DISPLAY <span class="display-timer" data-since="${bill.onDisplaySince}">0:00</span>`;
+    } else if (!tagEl.querySelector('.display-timer') && !SHOW_TIMER) {
+      tagEl.textContent = 'ON DISPLAY';
+    } else if (tagEl.querySelector('.display-timer')) {
+      // Just ensure data-since is correct
+      tagEl.querySelector('.display-timer').dataset.since = bill.onDisplaySince;
+    }
+    tagEl.style.display = 'inline-flex';
+  } else if (allDone && !showOnDisplay) {
+    if (!tagEl.classList.contains('waiting-tag')) {
+      tagEl.classList.add('waiting-tag');
+      tagEl.textContent = 'WAITING';
+      tagEl.style.display = 'inline-flex';
+    }
+  } else {
+    tagEl.style.display = 'none';
+  }
+}
+
+function renderBills() {
+  const container   = document.getElementById('bills-scroll');
+  const activeBills = Object.values(billsMap);
+
+  if (activeBills.length === 0) {
+    container.innerHTML = '<div class="no-bills">NO ACTIVE BILLS</div>';
+    return;
+  }
+
+  // Remove no-bills placeholder
+  const noBills = container.querySelector('.no-bills');
+  if (noBills) noBills.remove();
+
+  // Auto-promote to display
+  activeBills.forEach(bill => {
+    const allDone = bill.items.every(i => i.done);
+    if (allDone && !bill.onDisplay) {
+      const count = Object.values(billsMap).filter(b => b.onDisplay).length;
+      if (count < DISPLAY_CAPACITY) { bill.onDisplay = true; bill.onDisplaySince = Date.now(); }
+    }
+  });
+
+  // Remove stale cards
+  Array.from(container.querySelectorAll('.bill-card')).forEach(c => {
+    if (!billsMap[c.dataset.billId]) c.remove();
+  });
+
+  // Create or update each bill
+  activeBills.forEach(bill => {
+    let card = container.querySelector(`[data-bill-id="${bill.id}"]`);
+    if (!card) {
+      card = createBillCard(bill);
+      container.appendChild(card);
+    }
+    updateBillCard(card, bill);
+  });
+}
+
+let skipTimer = null;
+let skipRaf   = null;
+
+function startSkip(e, billId) {
+  e.preventDefault();
+  const btn = e.currentTarget;
+  btn.classList.add('holding');
+  const duration = 1000;
+  const start = performance.now();
+
+  function tick(now) {
+    const pct = Math.min(100, ((now - start) / duration) * 100);
+    btn.style.setProperty('--skip-progress', pct + '%');
+    if (pct < 100) {
+      skipRaf = requestAnimationFrame(tick);
+    } else {
+      skipBill(billId);
+    }
+  }
+  skipRaf = requestAnimationFrame(tick);
+}
+
+function cancelSkip(e) {
+  const btn = e.currentTarget;
+  if (skipRaf) { cancelAnimationFrame(skipRaf); skipRaf = null; }
+  if (skipTimer) { clearTimeout(skipTimer); skipTimer = null; }
+  btn.classList.remove('holding');
+  btn.style.setProperty('--skip-progress', '0%');
+}
+
+function skipBill(billId) {
+  const bill = billsMap[billId];
+  if (!bill) return;
+  // Remove from queues
+  burgerQueue = burgerQueue.filter(q => q.billId !== billId);
+  friesQueue  = friesQueue.filter(q => q.billId !== billId);
+  // Free display slot if it was on display
+  if (bill.onDisplay) {
+    const waiting = Object.values(billsMap).find(b => b.items.every(i=>i.done) && !b.onDisplay && b.id !== billId);
+    if (waiting && Object.values(billsMap).filter(b=>b.onDisplay && b.id !== billId).length < DISPLAY_CAPACITY) {
+      waiting.onDisplay = true; waiting.onDisplaySince = Date.now();
+    }
+  }
+  delete billsMap[billId];
+  render();
+  broadcast();
+}
+
+function advanceBill(billId) {
+  delete billsMap[billId];
+  const waiting = Object.values(billsMap).find(b => b.items.every(i=>i.done) && !b.onDisplay);
+  if (waiting && Object.values(billsMap).filter(b=>b.onDisplay).length < DISPLAY_CAPACITY) {
+    waiting.onDisplay = true; waiting.onDisplaySince = Date.now();
+  }
+  renderBills();
+  broadcast();
+}
+
+// ── Render ──
+function render() {
+  if (historyIndex.burger === -1) renderGrid('burger', BURGER_CAPACITY);
+  if (historyIndex.fries  === -1) renderGrid('fries',  FRIES_CAPACITY);
+  renderBills();
+  document.getElementById('burger-queue-count').textContent = burgerQueue.length;
+  document.getElementById('fries-queue-count').textContent  = friesQueue.length;
+  updateHistoryNav('burger');
+  updateHistoryNav('fries');
+}
+
+function addBill(bill) {
+  billsMap[bill.id] = { id: bill.id, items: bill.items.map(i=>({ name: i.name, qty: i.qty, done: false, doneSoFar: 0 })) };
+  bill.items.forEach(({ name, qty }) => {
+    const target = BURGER_ITEMS.includes(name) ? burgerQueue : friesQueue;
+    for (let i = 0; i < qty; i++) target.push({ name, billId: bill.id, timestamp: bill.timestamp });
+  });
+  render();
+  broadcast();
+}
+
+function addRandomOrder() {
+  const id = `B${String(billCounter++).padStart(3,'0')}`;
+  const pool = [...BURGER_ITEMS, ...FRIES_ITEMS];
+  const picked = new Set(); const items = [];
+  while (items.length < Math.floor(Math.random()*3)+1) {
+    const name = pool[Math.floor(Math.random()*pool.length)];
+    if (!picked.has(name)) { picked.add(name); items.push({ name, qty: Math.floor(Math.random()*2)+1 }); }
+  }
+  addBill({ id, items, timestamp: Date.now() });
+}
+
+// ── Columns ──
+function updateGrid() {
+  const visible   = Object.entries(visibleCols).filter(([,v])=>v).map(([k])=>k);
+  const billsOnly = visible.length === 1 && visibleCols.bills;
+  document.getElementById('stations').style.gridTemplateColumns =
+    visible.map(k => k==='bills' ? (billsOnly ? '1fr' : BILLS_WIDTH+'px') : '1fr').join(' ');
+  ['burger','fries','bills'].forEach(k => {
+    document.getElementById(`col-${k}`).classList.toggle('hidden', !visibleCols[k]);
+    const opt = document.getElementById(`opt-${k}`);
+    if (opt) opt.classList.toggle('active', visibleCols[k]);
+  });
+  document.getElementById('col-bills').classList.toggle('expanded', billsOnly);
+  ['burger','fries'].forEach(k => document.getElementById(`col-${k}`).style.borderRight = '');
+  const vs = ['burger','fries'].filter(k=>visibleCols[k]);
+  if (vs.length > 0 && !visibleCols.bills) document.getElementById(`col-${vs[vs.length-1]}`).style.borderRight = 'none';
+}
+
+function toggleColumn(col) { visibleCols[col] = !visibleCols[col]; updateGrid(); }
+function toggleDropdown() { document.getElementById('view-dropdown').classList.toggle('open'); }
+document.addEventListener('click', e => {
+  if (!document.getElementById('view-selector').contains(e.target))
+    document.getElementById('view-dropdown').classList.remove('open');
+});
+
+// ── Settings ──
+function openSettings() {
+  document.getElementById('s-outlet-name').value    = document.getElementById('header-title').textContent.replace('KDS — ','');
+  document.getElementById('s-burger-name').value    = document.getElementById('burger-station-name').textContent;
+  document.getElementById('s-fries-name').value     = document.getElementById('fries-station-name').textContent;
+  document.getElementById('s-burger-cap').textContent  = BURGER_CAPACITY;
+  document.getElementById('s-fries-cap').textContent   = FRIES_CAPACITY;
+  document.getElementById('s-display-cap').textContent = DISPLAY_CAPACITY;
+  document.getElementById('s-orange-thresh').textContent  = ORANGE_THRESH;
+  document.getElementById('s-red-thresh').textContent     = RED_THRESH;
+  document.getElementById('s-nudge-interval').textContent = NUDGE_INTERVAL;
+  document.getElementById('s-bills-width').textContent = BILLS_WIDTH;
+  document.getElementById('s-qty-size').textContent    = 48;
+  document.getElementById('s-clock-format').value      = CLOCK_FORMAT;
+  setToggle('s-show-icons',    SHOW_ICONS);
+  setToggle('s-show-timer',    SHOW_TIMER);
+  setToggle('s-show-bill-ids', SHOW_BILL_IDS);
+  setToggle('s-show-empty',    SHOW_EMPTY);
+  setToggle('s-col-burger',    visibleCols.burger);
+  setToggle('s-col-fries',     visibleCols.fries);
+  setToggle('s-col-bills',     visibleCols.bills);
+  setToggle('s-show-simulate', true);
+  setToggle('s-sound',         false);
+  document.getElementById('settings-modal').classList.add('open');
+}
+
+function closeSettings() { document.getElementById('settings-modal').classList.remove('open'); }
+
+function saveSettings() {
+  document.getElementById('header-title').textContent = 'KDS — ' + document.getElementById('s-outlet-name').value.trim().toUpperCase();
+  CLOCK_FORMAT = document.getElementById('s-clock-format').value;
+  document.getElementById('simulate-btn').style.display = document.getElementById('s-show-simulate').classList.contains('on') ? '' : 'none';
+  document.getElementById('burger-station-name').textContent = document.getElementById('s-burger-name').value.trim().toUpperCase();
+  document.getElementById('fries-station-name').innerHTML    = document.getElementById('s-fries-name').value.trim().toUpperCase();
+  BURGER_CAPACITY = parseInt(document.getElementById('s-burger-cap').textContent);
+  FRIES_CAPACITY  = parseInt(document.getElementById('s-fries-cap').textContent);
+  document.getElementById('burger-cap-display').textContent = BURGER_CAPACITY;
+  document.getElementById('fries-cap-display').textContent  = FRIES_CAPACITY;
+  document.querySelector('.burger-station .batch-grid').style.gridTemplateRows = `repeat(${Math.ceil(BURGER_CAPACITY/2)}, 1fr)`;
+  document.querySelector('.fries-station  .batch-grid').style.gridTemplateRows = `repeat(${Math.ceil(FRIES_CAPACITY/2)}, 1fr)`;
+  SHOW_BILL_IDS    = document.getElementById('s-show-bill-ids').classList.contains('on');
+  SHOW_EMPTY       = document.getElementById('s-show-empty').classList.contains('on');
+  DISPLAY_CAPACITY = parseInt(document.getElementById('s-display-cap').textContent);
+  BILLS_WIDTH      = parseInt(document.getElementById('s-bills-width').textContent);
+  SHOW_ICONS       = document.getElementById('s-show-icons').classList.contains('on');
+  SHOW_TIMER       = document.getElementById('s-show-timer').classList.contains('on');
+  ORANGE_THRESH    = parseInt(document.getElementById('s-orange-thresh').textContent);
+  RED_THRESH       = parseInt(document.getElementById('s-red-thresh').textContent);
+  NUDGE_INTERVAL   = parseInt(document.getElementById('s-nudge-interval').textContent);
+  visibleCols.burger = document.getElementById('s-col-burger').classList.contains('on');
+  visibleCols.fries  = document.getElementById('s-col-fries').classList.contains('on');
+  visibleCols.bills  = document.getElementById('s-col-bills').classList.contains('on');
+  updateGrid();
+  document.documentElement.style.setProperty('--burger-accent', document.getElementById('s-burger-color').value);
+  document.documentElement.style.setProperty('--fries-accent',  document.getElementById('s-fries-color').value);
+  document.documentElement.style.setProperty('--done-color',    document.getElementById('s-done-color').value);
+  document.querySelector('header').style.background = document.getElementById('s-header-color').value;
+  const qtySize = parseInt(document.getElementById('s-qty-size').textContent);
+  document.querySelectorAll('.item-qty').forEach(el => el.style.fontSize = qtySize + 'px');
+  render();
+  closeSettings();
+}
+
+function switchTab(e, tab) {
+  document.querySelectorAll('.modal-nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.settings-panel').forEach(el => el.classList.remove('active'));
+  e.currentTarget.classList.add('active');
+  document.getElementById('panel-' + tab).classList.add('active');
+}
+
+function toggleSetting(id) { document.getElementById(id).classList.toggle('on'); }
+function setToggle(id, val) { document.getElementById(id).classList.toggle('on', val); }
+function stepValue(id, delta, min, max) {
+  const el = document.getElementById(id);
+  el.textContent = Math.min(max, Math.max(min, parseInt(el.textContent) + delta));
+}
+
+// ── Clock & timers ──
+setInterval(() => {
+  const now = new Date();
+  document.getElementById('clock').textContent = CLOCK_FORMAT === '12'
+    ? now.toLocaleTimeString('en-US', { hour12: true })
+    : now.toLocaleTimeString('en-US', { hour12: false });
+
+  document.querySelectorAll('.display-timer').forEach(el => {
+    const secs = Math.floor((Date.now() - parseInt(el.dataset.since, 10)) / 1000);
+    el.textContent = `${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`;
+    const tag = el.closest('.on-display-tag');
+    if (secs >= RED_THRESH) {
+      tag.style.borderColor = '#ef4444'; tag.style.color = '#ef4444';
+      if (secs % NUDGE_INTERVAL === 0) { tag.classList.remove('nudge'); void tag.offsetWidth; tag.classList.add('nudge'); }
+    } else if (secs >= ORANGE_THRESH) {
+      tag.style.borderColor = '#f97316'; tag.style.color = '#f97316';
+      if (secs % NUDGE_INTERVAL === 0) { tag.classList.remove('nudge'); void tag.offsetWidth; tag.classList.add('nudge'); }
+    } else {
+      tag.style.borderColor = ''; tag.style.color = '';
+      tag.classList.remove('nudge');
+    }
+  });
+}, 1000);
+document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+// ── Init ──
+updateGrid();
+addRandomOrder(); addRandomOrder(); addRandomOrder();
+</script>
+</body>
+</html>
