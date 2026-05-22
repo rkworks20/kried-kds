@@ -21,6 +21,8 @@ jobs:
       - name: Build firmware and commit binary
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WIFI_SSID: ${{ secrets.WIFI_SSID }}
+          WIFI_PASSWORD: ${{ secrets.WIFI_PASSWORD }}
         run: |
           set -e
 
@@ -40,7 +42,11 @@ jobs:
           arduino-cli lib install "Adafruit SSD1306"
           arduino-cli lib install "Adafruit BusIO"
 
-          # ── 3. Compile ─────────────────────────────────────────────────────────
+          # ── 3. Create credentials file from GitHub Secrets ────────────────────
+          printf '#define WIFI_SSID     "%s"\n' "$WIFI_SSID"     > kds_oled/credentials.h
+          printf '#define WIFI_PASSWORD "%s"\n' "$WIFI_PASSWORD" >> kds_oled/credentials.h
+
+          # ── 4. Compile ─────────────────────────────────────────────────────────
           mkdir -p build
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
