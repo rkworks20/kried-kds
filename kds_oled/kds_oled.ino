@@ -14,10 +14,10 @@ const char* SERVER_HOST   = "kried-kds-production.up.railway.app";
 // ── OTA update ───────────────────────────────────────
 // Bump FIRMWARE_VERSION and kds_oled/version.txt together when you push new code.
 // GitHub Actions compiles and posts the binary; the ESP32 downloads it on next boot.
-#define FIRMWARE_VERSION  "1.0.6"
-// Both URLs served directly from GitHub — no CDN redirects
+#define FIRMWARE_VERSION  "1.0.7"
+// Versioned firmware URL — each release gets a unique filename, bypassing CDN cache
 #define OTA_VERSION_URL   "https://raw.githubusercontent.com/rkworks20/kried-kds/main/kds_oled/version.txt"
-#define OTA_FIRMWARE_URL  "https://raw.githubusercontent.com/rkworks20/kried-kds/main/firmware/firmware.bin"
+#define OTA_FIRMWARE_BASE "https://raw.githubusercontent.com/rkworks20/kried-kds/main/firmware/firmware-"
 
 #define UPDATE_INTERVAL   3000    // poll /current-bill every 3 seconds
 #define WIFI_TIMEOUT_MS  15000
@@ -454,7 +454,9 @@ void checkOTAUpdate() {
   oled.setCursor(2, 4);  oled.println("OTA UPDATING...");
   oled.setCursor(2, 16); oled.print("v" FIRMWARE_VERSION " -> v"); oled.println(latest);
   oled.display();
-  Serial.println("OTA: downloading firmware from " OTA_FIRMWARE_URL);
+  // Versioned URL — unique per release, never served from stale CDN cache
+  String fwUrl = String(OTA_FIRMWARE_BASE) + latest + ".bin";
+  Serial.println("OTA: downloading firmware from " + fwUrl);
 
   // Step 3 — download and flash
   WiFiClientSecure fwClient;
@@ -462,7 +464,7 @@ void checkOTAUpdate() {
   httpUpdate.setLedPin(LED_PIN, LOW);
   httpUpdate.rebootOnUpdate(true);   // auto-restart on success
 
-  t_httpUpdate_return ret = httpUpdate.update(fwClient, OTA_FIRMWARE_URL);
+  t_httpUpdate_return ret = httpUpdate.update(fwClient, fwUrl);
 
   switch (ret) {
     case HTTP_UPDATE_OK:

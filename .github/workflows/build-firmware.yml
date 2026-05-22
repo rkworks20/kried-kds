@@ -47,13 +47,14 @@ jobs:
             --output-dir build \
             kds_oled
 
-          # ── 4. Commit binary to repo (served via raw.githubusercontent.com) ────
+          # ── 4. Commit versioned binary to repo ────────────────────────────────
+          # Each version gets a unique filename → no CDN caching issues
           mkdir -p firmware
-          cp build/kds_oled.ino.bin firmware/firmware.bin
           VERSION=$(cat kds_oled/version.txt | tr -d '[:space:]')
+          cp build/kds_oled.ino.bin firmware/firmware-${VERSION}.bin
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add firmware/firmware.bin
+          git add firmware/firmware-${VERSION}.bin
           git diff --cached --quiet \
             && echo "Binary unchanged" \
             || git commit -m "build: firmware v${VERSION} [skip ci]"
