@@ -96,8 +96,33 @@
 
   /* ── Bills column ── */
   .bills-column { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); border-left: 1px solid var(--border); }
-  .bills-header { padding: 14px 16px; border-bottom: 2px solid var(--border); flex-shrink: 0; }
+  .bills-header { padding: 14px 16px; border-bottom: 2px solid var(--border); flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .bills-title { font-family: var(--font-display); font-size: 28px; letter-spacing: 4px; color: var(--text-muted); }
+  .bills-header-actions { display: flex; gap: 6px; align-items: center; }
+  .bills-action-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px; padding: 5px 10px; cursor: pointer; transition: all 0.15s; white-space: nowrap; display: flex; align-items: center; gap: 5px; }
+  .bills-action-btn:hover { border-color: #555; color: var(--text-primary); }
+  .bills-action-btn:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+  .bills-action-btn.undo-btn:not(:disabled):hover { border-color: var(--fries-accent); color: var(--fries-accent); }
+
+  /* ── Bills History Modal ── */
+  .bh-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 200; align-items: center; justify-content: center; }
+  .bh-overlay.open { display: flex; }
+  .bh-dialog { background: var(--surface); border: 1px solid var(--border); width: 560px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 24px 64px rgba(0,0,0,0.8); animation: bhSlideIn 0.2s ease; }
+  @keyframes bhSlideIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  .bh-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .bh-title { font-family: var(--font-display); font-size: 24px; letter-spacing: 4px; }
+  .bh-count { font-size: 11px; color: var(--text-muted); letter-spacing: 1px; font-family: var(--font-mono); }
+  .bh-close { background: none; border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; padding: 5px 12px; cursor: pointer; transition: all 0.15s; letter-spacing: 1px; }
+  .bh-close:hover { border-color: #555; color: var(--text-primary); }
+  .bh-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .bh-empty { color: var(--text-muted); font-size: 11px; letter-spacing: 1px; text-align: center; padding: 40px 0; }
+  .bh-entry { background: var(--surface2); border: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: flex-start; gap: 14px; }
+  .bh-entry-id { font-family: var(--font-display); font-size: 24px; letter-spacing: 2px; color: var(--done-color); flex-shrink: 0; line-height: 1; margin-top: 2px; }
+  .bh-entry-body { flex: 1; min-width: 0; }
+  .bh-entry-time { font-size: 10px; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 6px; }
+  .bh-entry-items { display: flex; flex-wrap: wrap; gap: 4px; }
+  .bh-item-tag { font-size: 10px; letter-spacing: 0.5px; padding: 2px 7px; border: 1px solid #3a3a3a; color: #888; white-space: nowrap; }
+  .bh-entry-check { font-size: 18px; color: var(--done-color); flex-shrink: 0; align-self: center; }
   .bills-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 16px; display: flex; flex-direction: column; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
   .bills-column.expanded .bills-scroll { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
   .no-bills { color: var(--text-muted); font-size: 11px; letter-spacing: 1px; text-align: center; padding: 40px 0; grid-column: 1 / -1; }
@@ -262,7 +287,13 @@
   </div>
 
   <div class="bills-column" id="col-bills">
-    <div class="bills-header"><div class="bills-title">BILLS</div></div>
+    <div class="bills-header">
+      <div class="bills-title">BILLS</div>
+      <div class="bills-header-actions">
+        <button class="bills-action-btn undo-btn" id="bills-undo-btn" onclick="undoDeliver()" disabled title="Undo last delivery">↩ UNDO</button>
+        <button class="bills-action-btn" onclick="openBillsHistory()">☰ HISTORY</button>
+      </div>
+    </div>
     <div class="bills-scroll" id="bills-scroll"></div>
   </div>
 </div>
@@ -271,6 +302,20 @@
 <div id="ws-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
   <div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:4px;color:#f0f0f0;">RECONNECTING</div>
   <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#666;letter-spacing:1px;">Connecting to server...</div>
+</div>
+
+<!-- Bills History Modal -->
+<div class="bh-overlay" id="bills-history-modal">
+  <div class="bh-dialog">
+    <div class="bh-header">
+      <div>
+        <div class="bh-title">DELIVERED BILLS</div>
+        <div class="bh-count" id="bh-count">0 BILLS</div>
+      </div>
+      <button class="bh-close" onclick="closeBillsHistory()">✕ CLOSE</button>
+    </div>
+    <div class="bh-body" id="bh-body"></div>
+  </div>
 </div>
 
 <!-- Settings Modal -->
@@ -383,20 +428,28 @@ const batchHistory = { burger: [], fries: [] };
 const historyIndex = { burger: -1, fries: -1 };
 const batchCooldownTimers = { burger: null, fries: null };
 
+// Bills delivery history & undo
+let billsHistory = [];          // [{id, items, deliveredAt}] — newest last
+let billsUndoStack = [];        // [{billsMap snapshot, billsHistory snapshot}] — up to 10
+
 // ── WebSocket sync ──
 let ws = null;
 let wsReconnectTimer = null;
 
 function getState() {
-  return { burgerQueue: burgerQueue.map(i=>({...i})), friesQueue: friesQueue.map(i=>({...i})), billsMap: JSON.parse(JSON.stringify(billsMap)), billCounter };
+  return { burgerQueue: burgerQueue.map(i=>({...i})), friesQueue: friesQueue.map(i=>({...i})), billsMap: JSON.parse(JSON.stringify(billsMap)), billCounter, billsHistory: billsHistory.slice() };
 }
 
 function applyState(state) {
   burgerQueue = state.burgerQueue;
   friesQueue  = state.friesQueue;
   billCounter = state.billCounter;
+  if (state.billsHistory) billsHistory = state.billsHistory;
   Object.keys(billsMap).forEach(k => delete billsMap[k]);
   Object.assign(billsMap, state.billsMap);
+  // Clear undo stack when a remote state sync arrives (another device may have diverged)
+  billsUndoStack = [];
+  updateUndoBtn();
   render();
 }
 
@@ -898,11 +951,25 @@ function advanceBill(billId) {
   const card = container ? container.querySelector(`.bill-card[data-bill-id="${billId}"]`) : null;
 
   function doDelete() {
+    // Save undo snapshot (full billsMap + history) before destroying
+    billsUndoStack.push({
+      billsMap:     JSON.parse(JSON.stringify(billsMap)),
+      billsHistory: billsHistory.slice()
+    });
+    if (billsUndoStack.length > 10) billsUndoStack.shift();
+
+    // Record in delivered history
+    const bill = billsMap[billId];
+    if (bill) {
+      billsHistory.push({ id: bill.id, items: bill.items.map(i=>({name:i.name,qty:i.qty})), deliveredAt: Date.now() });
+    }
+
     delete billsMap[billId];
     const waiting = Object.values(billsMap).find(b => b.items.every(i=>i.done) && !b.onDisplay);
     if (waiting && Object.values(billsMap).filter(b=>b.onDisplay).length < DISPLAY_CAPACITY) {
       waiting.onDisplay = true; waiting.onDisplaySince = Date.now();
     }
+    updateUndoBtn();
     renderBills();
     broadcast();
   }
@@ -935,6 +1002,76 @@ function advanceBill(billId) {
   // Re-render after the longest transition finishes
   setTimeout(doDelete, 400);
 }
+
+// ── Bills Undo ──
+function updateUndoBtn() {
+  const btn = document.getElementById('bills-undo-btn');
+  if (btn) btn.disabled = billsUndoStack.length === 0;
+}
+
+function undoDeliver() {
+  if (billsUndoStack.length === 0) return;
+  const snap = billsUndoStack.pop();
+
+  // Restore billsMap
+  Object.keys(billsMap).forEach(k => delete billsMap[k]);
+  Object.assign(billsMap, snap.billsMap);
+
+  // Restore history
+  billsHistory = snap.billsHistory;
+
+  updateUndoBtn();
+  renderBills();
+  broadcast();
+}
+
+// ── Bills History Modal ──
+function openBillsHistory() {
+  renderBillsHistoryModal();
+  document.getElementById('bills-history-modal').classList.add('open');
+}
+
+function closeBillsHistory() {
+  document.getElementById('bills-history-modal').classList.remove('open');
+}
+
+function renderBillsHistoryModal() {
+  const body  = document.getElementById('bh-body');
+  const count = document.getElementById('bh-count');
+  count.textContent = billsHistory.length + (billsHistory.length === 1 ? ' BILL' : ' BILLS');
+
+  if (billsHistory.length === 0) {
+    body.innerHTML = '<div class="bh-empty">NO DELIVERED BILLS YET</div>';
+    return;
+  }
+
+  body.innerHTML = '';
+  // Newest first
+  const entries = billsHistory.slice().reverse();
+  entries.forEach(entry => {
+    const el = document.createElement('div');
+    el.className = 'bh-entry';
+
+    const timeStr = new Date(entry.deliveredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const itemTags = entry.items.map(i =>
+      `<span class="bh-item-tag">${i.qty > 1 ? i.qty + '× ' : ''}${i.name.toUpperCase()}</span>`
+    ).join('');
+
+    el.innerHTML = `
+      <div class="bh-entry-id">${entry.id}</div>
+      <div class="bh-entry-body">
+        <div class="bh-entry-time">DELIVERED AT ${timeStr}</div>
+        <div class="bh-entry-items">${itemTags}</div>
+      </div>
+      <div class="bh-entry-check">✓</div>`;
+    body.appendChild(el);
+  });
+}
+
+// Close history modal on backdrop click
+document.getElementById('bills-history-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeBillsHistory();
+});
 
 // ── Render ──
 function render() {
