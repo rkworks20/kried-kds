@@ -1061,10 +1061,11 @@ function undoDeliver() {
   card.style.maxHeight    = naturalHeight + 'px';
   card.style.marginBottom = '16px';
 
-  // Clean up inline overrides once animation settles
+  // Clean up inline overrides once animation settles.
+  // Keep animation:'none' — clearing it would re-trigger the CSS class's
+  // slideIn animation and cause a blink.
   setTimeout(() => {
     card.style.transition   = '';
-    card.style.animation    = '';
     card.style.maxHeight    = '';
     card.style.overflow     = '';
     card.style.marginBottom = '';
