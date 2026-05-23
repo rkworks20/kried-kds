@@ -1,5 +1,5 @@
 # main.py — Kried KDS OLED display
-# MicroPython on ESP32-S3  |  v2.1.9
+# MicroPython on ESP32-S3  |  v2.2.0
 # OTA: bump version.txt + push this file to GitHub → device updates on next boot.
 
 import network, time, math, framebuf
@@ -10,7 +10,6 @@ import ssd1306
 # ── Config ───────────────────────────────────────────
 WIFI_NETWORKS = [
     ("Airtel_Rk?s Wifi", "wifi1234"),
-    ("Ram_Phone",         "12345678"),
 ]
 SERVER_HOST     = "kried-kds-production.up.railway.app"
 UPDATE_INTERVAL = 3000
