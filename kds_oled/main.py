@@ -1,5 +1,5 @@
 # main.py — Kried KDS OLED display
-# MicroPython on ESP32-S3  |  v2.0.8
+# MicroPython on ESP32-S3  |  v2.0.9
 # OTA: bump version.txt + push this file to GitHub → device updates on next boot.
 
 import network, time, math, framebuf
@@ -11,71 +11,16 @@ import ssd1306
 WIFI_SSID       = "Airtel_Rk?s Wifi"
 WIFI_PASSWORD   = "wifi1234"
 SERVER_HOST     = "kried-kds-production.up.railway.app"
-UPDATE_INTERVAL = 3000   # ms — how often to poll the server
-WIFI_RETRY      = 5000   # ms — how long to wait between WiFi attempts
-WIFI_TIMEOUT    = 15000  # ms — give up connecting after this
-ICON_MS         = 1000   # ms — how long each icon shows
+UPDATE_INTERVAL = 3000
+WIFI_RETRY      = 5000
+WIFI_TIMEOUT    = 15000
 
 # ── Hardware ─────────────────────────────────────────
 i2c  = I2C(0, scl=Pin(6), sda=Pin(5), freq=400_000)
 oled = ssd1306.SSD1306_I2C(128, 32, i2c)
 led  = PWM(Pin(21), freq=5000, duty=0)
 
-# ── Bitmaps ───────────────────────────────────────────────────────────────────
-# Source bitmaps from image2cpp (white background) → XOR 0xFF for MicroPython
-# MONO_HLSB where 1-bit = pixel ON (white).
-
-# Burger icon — 40×32 px
-_burger_raw = bytes([
-    0xff,0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0x21,0xff,0xff, 0xff,0xf8,0x00,0x3f,0xff,
-    0xf7,0xe0,0x00,0x0f,0xff, 0xfb,0xc0,0x01,0x07,0xff,
-    0xdf,0x80,0x00,0x03,0xff, 0xef,0x00,0x80,0x01,0xdf,
-    0xfe,0x00,0x00,0x00,0xff, 0xfe,0x00,0x00,0x00,0xf7,
-    0xfe,0x00,0x00,0x00,0x7f, 0xfe,0x00,0x00,0x00,0x7f,
-    0xff,0x00,0x00,0x01,0xff, 0xfe,0xff,0xff,0xff,0x7f,
-    0xfb,0xff,0xff,0xfb,0xff, 0xfa,0x33,0x80,0x60,0xff,
-    0xfe,0x00,0x00,0x00,0xff, 0xfe,0x00,0x00,0x00,0x7f,
-    0xfb,0x00,0x00,0xe0,0xdf, 0xfc,0x8e,0x79,0xff,0x7f,
-    0xf8,0xd1,0x4e,0x00,0x7f, 0xfe,0x61,0x86,0x00,0xff,
-    0xff,0x01,0x80,0x01,0xff, 0xff,0x80,0x00,0x03,0xff,
-    0xff,0xc0,0x00,0x07,0xff, 0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff,0xff,
-    0xff,0xff,0xff,0xff,0xff, 0xff,0xff,0xff,0xff,0xff,
-])
-BURGER_BMP = bytearray(b ^ 0xff for b in _burger_raw)
-burger_fb  = framebuf.FrameBuffer(BURGER_BMP, 40, 32, framebuf.MONO_HLSB)
-
-# Fries icon — 30×32 px
-_fries_raw = bytes([
-    0xff,0xff,0xff,0xf0, 0xff,0xff,0xff,0xf0, 0xff,0xff,0xff,0xf0, 0xff,0xff,0xff,0xf0,
-    0xff,0xe3,0x3f,0xf0, 0xff,0xeb,0xbb,0xf0, 0xfe,0xa9,0x99,0xf0, 0xfe,0x81,0xab,0xf0,
-    0xf2,0xa1,0xa1,0x70, 0xec,0x65,0xe2,0xb0, 0xe7,0x65,0xe4,0x30, 0xf3,0x24,0xc4,0x30,
-    0xf1,0x24,0x4c,0x70, 0xf1,0x35,0x48,0x30, 0xf2,0x35,0x42,0x30, 0xf1,0x11,0x4c,0x70,
-    0xf1,0x91,0x10,0x70, 0xf1,0x30,0x60,0x70, 0xf9,0x0f,0x00,0x70, 0xf8,0x00,0x00,0xf0,
-    0xf8,0x00,0x00,0xf0, 0xf8,0x00,0x00,0xf0, 0xfc,0x00,0x00,0xf0, 0xfc,0x00,0x00,0xf0,
-    0xfc,0x00,0x01,0xf0, 0xfc,0x00,0x01,0xf0, 0xfc,0x00,0x01,0xf0, 0xfe,0x00,0x01,0xf0,
-    0xfe,0x0f,0xc3,0xf0, 0xff,0xff,0xff,0xf0, 0xff,0xff,0xff,0xf0, 0xff,0xff,0xff,0xf0,
-])
-FRIES_BMP = bytearray(b ^ 0xff for b in _fries_raw)
-fries_fb  = framebuf.FrameBuffer(FRIES_BMP, 30, 32, framebuf.MONO_HLSB)
-
-# Chicken leg piece — 32×32 px
-_chicken_raw = bytes([
-    0xff,0xff,0xff,0xf8, 0xff,0xff,0xff,0xf8, 0xff,0xff,0xff,0xf8, 0xff,0xff,0xff,0xf8,
-    0xff,0xff,0xff,0xf8, 0xff,0xff,0xff,0xf8, 0xff,0xff,0xee,0x38, 0xff,0xfb,0xc0,0x18,
-    0xff,0xf8,0x00,0x18, 0xff,0xf0,0x00,0x08, 0xff,0xf0,0x00,0x08, 0xff,0xf0,0x00,0x08,
-    0xff,0xe0,0x00,0x88, 0xff,0xe0,0x02,0x08, 0xff,0xc0,0x00,0x88, 0xff,0x80,0x00,0x98,
-    0xff,0x60,0x00,0x18, 0xfe,0x40,0x00,0x38, 0xfe,0x40,0x00,0x78, 0xfe,0x00,0x01,0xf8,
-    0xfe,0x40,0x0f,0xf8, 0xff,0x00,0x3f,0xf8, 0xff,0x80,0x7f,0xf8, 0xfc,0xc0,0xff,0xf8,
-    0xf8,0x73,0xff,0xf8, 0x80,0x7f,0xff,0xf8, 0x80,0xff,0xff,0xf8, 0x81,0xff,0xff,0xf8,
-    0xc1,0xff,0xff,0xf8, 0xe1,0xff,0xff,0xf8, 0xe1,0xff,0xff,0xf8, 0xff,0xff,0xff,0xf8,
-])
-CHICKEN_BMP = bytearray(b ^ 0xff for b in _chicken_raw)
-chicken_fb  = framebuf.FrameBuffer(CHICKEN_BMP, 32, 32, framebuf.MONO_HLSB)
-
-# Kried logo — 81×32 px
+# ── Kried logo — 81×32 px ────────────────────────────
 _logo_raw = bytes([
     0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x80,
     0xff,0xe0,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x80,
@@ -112,58 +57,21 @@ _logo_raw = bytes([
 ])
 LOGO_BMP = bytearray(b ^ 0xff for b in _logo_raw)
 logo_fb  = framebuf.FrameBuffer(LOGO_BMP, 81, 32, framebuf.MONO_HLSB)
-LOGO_X   = (128 - 81) // 2  # = 23, centred
-
-# Icon cycle list — (framebuf, width_px)
-ICONS = [
-    (burger_fb,  40),
-    (fries_fb,   30),
-    (chicken_fb, 32),
-]
-
-# ── Icon cycling state ────────────────────────────────
-_icon_idx    = 0
-_icon_last_t = 0
-
-def current_icon():
-    return ICONS[_icon_idx]
-
-def reset_icon():
-    global _icon_idx, _icon_last_t
-    _icon_idx    = 0
-    _icon_last_t = time.ticks_ms()
-
-def update_icon_cycle():
-    """Switch to the next icon every ICON_MS while a bill is active."""
-    global _icon_idx, _icon_last_t
-    if not current_bill or current_bill == "__UNKNOWN__":
-        return
-    if _flip_phase != FLIP_IDLE:
-        return
-    if time.ticks_diff(time.ticks_ms(), _icon_last_t) < ICON_MS:
-        return
-    _icon_last_t = time.ticks_ms()
-    _icon_idx    = (_icon_idx + 1) % len(ICONS)
-    draw_final(current_bill)
+LOGO_X   = (128 - 81) // 2
 
 # ── Text helpers ──────────────────────────────────────
-# Pre-allocated source buffer for text scaling (up to 8 chars = 64 px wide).
 _tsrc_buf = bytearray(8 * 8)
 _tsrc_fb  = framebuf.FrameBuffer(_tsrc_buf, 64, 8, framebuf.MONO_HLSB)
 
-def get_scale(bill, icon_w):
-    """Largest scale where bill text fits in the area beside the icon."""
-    avail = 128 - icon_w - 4  # 4 px gap
+def get_scale(bill):
+    """Largest scale where bill text fits full-screen width."""
     for s in (3, 2, 1):
-        if len(bill) * 8 * s <= avail:
+        if len(bill) * 8 * s <= 128:
             return s
     return 1
 
-def bill_text_x(bill, icon_w, scale):
-    area_x = icon_w + 4
-    area_w = 128 - area_x
-    text_w = len(bill) * 8 * scale
-    return area_x + max(0, (area_w - text_w) // 2)
+def bill_text_x(bill, scale):
+    return max(0, (128 - len(bill) * 8 * scale) // 2)
 
 def draw_text_large(text, x, y, scale):
     sw = min(len(text) * 8, 64)
@@ -183,44 +91,33 @@ def splash(line1, line2=""):
     oled.show()
 
 def draw_content(bill):
-    """Fill oled buffer — does NOT call show()."""
     oled.fill(0)
     if not bill or bill == "__UNKNOWN__":
         oled.blit(logo_fb, LOGO_X, 0)
     else:
-        ic_fb, ic_w = current_icon()
-        scale = get_scale(bill, ic_w)
-        ty    = (32 - 8 * scale) // 2        # vertically centred
-        draw_text_large(bill, bill_text_x(bill, ic_w, scale), ty, scale)
-        oled.blit(ic_fb, 0, 0)
+        scale = get_scale(bill)
+        ty    = (32 - 8 * scale) // 2
+        draw_text_large(bill, bill_text_x(bill, scale), ty, scale)
 
 def draw_final(bill):
     draw_content(bill)
     oled.show()
 
 def draw_squished(bill, h):
-    """Draw bill content clipped to `h` pixels around the vertical centre."""
     oled.fill(0)
     y_top = max(0, 16 - h // 2)
     y_bot = min(32, y_top + h)
 
     if not bill or bill == "__UNKNOWN__":
         oled.blit(logo_fb, LOGO_X, 0)
-        if y_top > 0:
-            oled.fill_rect(0, 0, 128, y_top, 0)
-        if y_bot < 32:
-            oled.fill_rect(0, y_bot, 128, 32 - y_bot, 0)
+        if y_top > 0:  oled.fill_rect(0, 0, 128, y_top, 0)
+        if y_bot < 32: oled.fill_rect(0, y_bot, 128, 32 - y_bot, 0)
     else:
-        ic_fb, ic_w = current_icon()
-        scale = get_scale(bill, ic_w)
+        scale = get_scale(bill)
         ty    = (32 - 8 * scale) // 2
-        draw_text_large(bill, bill_text_x(bill, ic_w, scale), ty, scale)
-        # Mask text area only — icon stays static
-        if y_top > 0:
-            oled.fill_rect(ic_w + 4, 0, 128 - ic_w - 4, y_top, 0)
-        if y_bot < 32:
-            oled.fill_rect(ic_w + 4, y_bot, 128 - ic_w - 4, 32 - y_bot, 0)
-        oled.blit(ic_fb, 0, 0)
+        draw_text_large(bill, bill_text_x(bill, scale), ty, scale)
+        if y_top > 0:  oled.fill_rect(0, 0, 128, y_top, 0)
+        if y_bot < 32: oled.fill_rect(0, y_bot, 128, 32 - y_bot, 0)
 
     oled.show()
 
@@ -274,7 +171,7 @@ def update_flip():
         else:
             draw_squished(_flip_to, _flip_h)
 
-# ── LED (breathing / blink) ───────────────────────────
+# ── LED ───────────────────────────────────────────────
 LED_OFF, LED_BREATHE, LED_BLINK = 0, 1, 2
 
 _led_mode    = LED_OFF
@@ -285,7 +182,7 @@ _breathe_dir = 1.0
 _blink_state = False
 
 def set_led(mode):
-    global _led_mode, _led_mode_t, _breathe_val, _breathe_dir, _blink_state
+    global _led_mode, _led_mode_t, _blink_state
     _led_mode    = mode
     _led_mode_t  = time.ticks_ms()
     _blink_state = False
@@ -296,16 +193,14 @@ def update_led():
     global _breathe_val, _breathe_dir, _blink_state, _led_tick_t, _led_mode
     now = time.ticks_ms()
     if _led_mode == LED_BREATHE:
-        if time.ticks_diff(now, _led_tick_t) < 16:
-            return
+        if time.ticks_diff(now, _led_tick_t) < 16: return
         _led_tick_t   = now
         _breathe_val += _breathe_dir * 0.02
         if _breathe_val >= 1.0: _breathe_val = 1.0; _breathe_dir = -1.0
         if _breathe_val <= 0.0: _breathe_val = 0.0; _breathe_dir =  1.0
         led.duty(int((math.sin(_breathe_val * math.pi) + 1.0) / 2.0 * 1023))
     elif _led_mode == LED_BLINK:
-        if time.ticks_diff(now, _led_tick_t) < 80:
-            return
+        if time.ticks_diff(now, _led_tick_t) < 80: return
         _led_tick_t  = now
         _blink_state = not _blink_state
         led.duty(1023 if _blink_state else 0)
@@ -340,24 +235,19 @@ def try_wifi():
 def poll_bill():
     global current_bill
     try:
-        url = "https://" + SERVER_HOST + "/current-bill"
-        r   = urequests.get(url, timeout=5)
+        r = urequests.get("https://" + SERVER_HOST + "/current-bill", timeout=5)
         if r.status_code != 200:
-            r.close()
-            return
+            r.close(); return
         body = r.text
         r.close()
         idx = body.find('"bill":"')
-        if idx < 0:
-            return
+        if idx < 0: return
         idx += 8
         end = body.find('"', idx)
-        if end < 0:
-            return
+        if end < 0: return
         fetched = body[idx:end]
         if fetched != current_bill:
             from_b = "" if current_bill == "__UNKNOWN__" else current_bill
-            reset_icon()          # start icon cycle from burger on new bill
             start_flip(from_b, fetched)
             current_bill = fetched
             set_led(LED_BLINK)
@@ -370,7 +260,6 @@ splash("KRIED KDS")
 while True:
     update_led()
     update_flip()
-    update_icon_cycle()
     now = time.ticks_ms()
 
     if not wlan.isconnected():
