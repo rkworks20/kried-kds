@@ -1,5 +1,5 @@
 # main.py — Kried KDS OLED display
-# MicroPython on ESP32-S3  |  v2.1.2
+# MicroPython on ESP32-S3  |  v2.1.1
 # OTA: bump version.txt + push this file to GitHub → device updates on next boot.
 
 import network, time, math, framebuf
@@ -59,64 +59,69 @@ LOGO_BMP = bytearray(b ^ 0xff for b in _logo_raw)
 logo_fb  = framebuf.FrameBuffer(LOGO_BMP, 81, 32, framebuf.MONO_HLSB)
 LOGO_X   = (128 - 81) // 2
 
-# ── 7-segment LCD font ────────────────────────────────
-# Segment order: [top, top-left, top-right, middle, bot-left, bot-right, bottom]
-_SEG7 = {
-    '0':[1,1,1,0,1,1,1],
-    '1':[0,0,1,0,0,1,0],
-    '2':[1,0,1,1,1,0,1],
-    '3':[1,0,1,1,0,1,1],
-    '4':[0,1,1,1,0,1,0],
-    '5':[1,1,0,1,0,1,1],
-    '6':[1,1,0,1,1,1,1],
-    '7':[1,0,1,0,0,1,0],
-    '8':[1,1,1,1,1,1,1],
-    '9':[1,1,1,1,0,1,1],
-    '-':[0,0,0,1,0,0,0],
-    ' ':[0,0,0,0,0,0,0],
+# ── 5×7 dot-matrix font ───────────────────────────────
+# Each char: 7 rows, each row is a 5-bit value (bit4=left col, bit0=right col)
+_FONT = {
+    '0':[0x0E,0x11,0x11,0x11,0x11,0x11,0x0E],
+    '1':[0x04,0x0C,0x04,0x04,0x04,0x04,0x0E],
+    '2':[0x0E,0x11,0x01,0x02,0x04,0x08,0x1F],
+    '3':[0x0E,0x11,0x01,0x06,0x01,0x11,0x0E],
+    '4':[0x02,0x06,0x0A,0x12,0x1F,0x02,0x02],
+    '5':[0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E],
+    '6':[0x06,0x08,0x10,0x1E,0x11,0x11,0x0E],
+    '7':[0x1F,0x01,0x02,0x04,0x08,0x08,0x08],
+    '8':[0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E],
+    '9':[0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C],
+    'A':[0x0E,0x11,0x11,0x1F,0x11,0x11,0x11],
+    'B':[0x1E,0x11,0x11,0x1E,0x11,0x11,0x1E],
+    'C':[0x0E,0x11,0x10,0x10,0x10,0x11,0x0E],
+    'D':[0x1E,0x11,0x11,0x11,0x11,0x11,0x1E],
+    'E':[0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F],
+    'F':[0x1F,0x10,0x10,0x1E,0x10,0x10,0x10],
+    'G':[0x0E,0x11,0x10,0x17,0x11,0x11,0x0E],
+    'H':[0x11,0x11,0x11,0x1F,0x11,0x11,0x11],
+    'I':[0x0E,0x04,0x04,0x04,0x04,0x04,0x0E],
+    'J':[0x07,0x02,0x02,0x02,0x02,0x12,0x0C],
+    'K':[0x11,0x12,0x14,0x18,0x14,0x12,0x11],
+    'L':[0x10,0x10,0x10,0x10,0x10,0x10,0x1F],
+    'M':[0x11,0x1B,0x15,0x11,0x11,0x11,0x11],
+    'N':[0x11,0x19,0x15,0x13,0x11,0x11,0x11],
+    'O':[0x0E,0x11,0x11,0x11,0x11,0x11,0x0E],
+    'P':[0x1E,0x11,0x11,0x1E,0x10,0x10,0x10],
+    'Q':[0x0E,0x11,0x11,0x11,0x15,0x12,0x0D],
+    'R':[0x1E,0x11,0x11,0x1E,0x14,0x12,0x11],
+    'S':[0x0E,0x11,0x10,0x0E,0x01,0x11,0x0E],
+    'T':[0x1F,0x04,0x04,0x04,0x04,0x04,0x04],
+    'U':[0x11,0x11,0x11,0x11,0x11,0x11,0x0E],
+    'V':[0x11,0x11,0x11,0x11,0x11,0x0A,0x04],
+    'W':[0x11,0x11,0x11,0x15,0x15,0x1B,0x11],
+    'X':[0x11,0x11,0x0A,0x04,0x0A,0x11,0x11],
+    'Y':[0x11,0x11,0x0A,0x04,0x04,0x04,0x04],
+    'Z':[0x1F,0x01,0x02,0x04,0x08,0x10,0x1F],
+    '-':[0x00,0x00,0x00,0x1F,0x00,0x00,0x00],
+    ' ':[0x00,0x00,0x00,0x00,0x00,0x00,0x00],
 }
 
-def draw_7seg(text):
-    """Draw text as classic 7-segment LCD digits, auto-sized to fill the screen."""
+def draw_dotmatrix(text):
+    """Draw text as a 5×7 dot-matrix, auto-sized to fill the screen width."""
     n = len(text)
     if n == 0:
         return
-    gap = 4                              # px gap between chars
-    sw  = 3 if n <= 3 else 2            # segment bar thickness
-
-    # Vertical: top_bar + top_half + mid_bar + bot_half + bot_bar = 3*sw + 2*seg_h
-    # Target total height = 28px (2px margin top + bottom)
-    seg_h = max(5, (28 - 3 * sw) // 2) # height of each vertical half-segment
-    ch_h  = 3 * sw + 2 * seg_h
-
-    # Horizontal: fit n chars + gaps into 124px (2px margin each side)
-    max_ch_w = (124 - (n - 1) * gap) // n
-    seg_w = max(6, max_ch_w - 2 * sw)
-    seg_w = min(seg_w, int(seg_h * 2.2))  # keep proportions: width ~ half height
-    ch_w  = seg_w + 2 * sw
-    total = n * ch_w + (n - 1) * gap
-
-    x0 = (128 - total) // 2
-    y0 = (32 - ch_h) // 2
-
+    gap = 2                                          # px between chars
+    dy  = 4                                          # dot height (fixed by screen)
+    dx  = min((128 - (n-1)*gap) // (5*n), dy*2)    # dot width, max 2× height
+    dx  = max(3, dx)
+    char_w = 5 * dx
+    total  = n * char_w + (n-1) * gap
+    x0     = (128 - total) // 2
+    y0     = (32 - 7 * dy) // 2                     # vertically centred
     for i, ch in enumerate(text):
-        s  = _SEG7.get(ch, _SEG7[' '])
-        cx = x0 + i * (ch_w + gap)
-        cy = y0
-        # top horizontal
-        if s[0]: oled.fill_rect(cx + sw,          cy,                   seg_w, sw,    1)
-        # top-left vertical
-        if s[1]: oled.fill_rect(cx,               cy + sw,              sw,    seg_h, 1)
-        # top-right vertical
-        if s[2]: oled.fill_rect(cx + sw + seg_w,  cy + sw,              sw,    seg_h, 1)
-        # middle horizontal
-        if s[3]: oled.fill_rect(cx + sw,          cy + sw + seg_h,      seg_w, sw,    1)
-        # bottom-left vertical
-        if s[4]: oled.fill_rect(cx,               cy + sw * 2 + seg_h,  sw,    seg_h, 1)
-        # bottom-right vertical
-        if s[5]: oled.fill_rect(cx + sw + seg_w,  cy + sw * 2 + seg_h,  sw,    seg_h, 1)
-        # bottom horizontal
-        if s[6]: oled.fill_rect(cx + sw,          cy + sw * 2 + seg_h * 2, seg_w, sw, 1)
+        rows = _FONT.get(ch.upper(), _FONT['-'])
+        cx = x0 + i * (char_w + gap)
+        for row, bits in enumerate(rows):
+            for col in range(5):
+                if bits & (0x10 >> col):
+                    oled.fill_rect(cx + col*dx, y0 + row*dy, dx, dy, 1)
 
 # ── OLED drawing ─────────────────────────────────────
 def splash(line1, line2=""):
@@ -131,7 +136,7 @@ def draw_content(bill):
     if not bill or bill == "__UNKNOWN__":
         oled.blit(logo_fb, LOGO_X, 0)
     else:
-        draw_7seg(bill)
+        draw_dotmatrix(bill)
 
 def draw_final(bill):
     draw_content(bill)
@@ -144,7 +149,7 @@ def draw_squished(bill, h):
     if not bill or bill == "__UNKNOWN__":
         oled.blit(logo_fb, LOGO_X, 0)
     else:
-        draw_7seg(bill)
+        draw_dotmatrix(bill)
     if y_top > 0:  oled.fill_rect(0, 0,     128, y_top,      0)
     if y_bot < 32: oled.fill_rect(0, y_bot, 128, 32 - y_bot, 0)
     oled.show()
