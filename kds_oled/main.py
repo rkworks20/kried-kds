@@ -1,5 +1,5 @@
 # main.py — Kried KDS OLED display
-# MicroPython on ESP32-S3  |  v2.0.9
+# MicroPython on ESP32-S3  |  v2.1.0
 # OTA: bump version.txt + push this file to GitHub → device updates on next boot.
 
 import network, time, math, framebuf
@@ -59,28 +59,49 @@ LOGO_BMP = bytearray(b ^ 0xff for b in _logo_raw)
 logo_fb  = framebuf.FrameBuffer(LOGO_BMP, 81, 32, framebuf.MONO_HLSB)
 LOGO_X   = (128 - 81) // 2
 
-# ── Text helpers ──────────────────────────────────────
-_tsrc_buf = bytearray(8 * 8)
-_tsrc_fb  = framebuf.FrameBuffer(_tsrc_buf, 64, 8, framebuf.MONO_HLSB)
+# ── 7-segment digital font ────────────────────────────
+# Segment bits: a=0x01(top) b=0x02(top-R) c=0x04(bot-R) d=0x08(bot)
+#               e=0x10(bot-L) f=0x20(top-L) g=0x40(mid)
+#   aaa
+#  f   b
+#  f   b
+#   ggg
+#  e   c
+#  e   c
+#   ddd
+_SEG = {
+    '0':0x3f,'1':0x06,'2':0x5b,'3':0x4f,'4':0x66,
+    '5':0x6d,'6':0x7d,'7':0x07,'8':0x7f,'9':0x6f,
+    'A':0x77,'B':0x7c,'C':0x39,'D':0x5e,'E':0x79,
+    'F':0x71,'G':0x3d,'H':0x76,'I':0x30,'J':0x0e,
+    'L':0x38,'N':0x76,'O':0x3f,'P':0x73,'S':0x6d,
+    'T':0x78,'U':0x3e,'Y':0x6e,'-':0x40,' ':0x00,
+}
 
-def get_scale(bill):
-    """Largest scale where bill text fits full-screen width."""
-    for s in (3, 2, 1):
-        if len(bill) * 8 * s <= 128:
-            return s
-    return 1
+def _draw_seg_char(ch, x, y, w, h, t):
+    s  = _SEG.get(ch.upper(), 0x40)   # unknown → middle bar only
+    hw = h // 2
+    if s & 0x01: oled.fill_rect(x+t,   y,         w-2*t, t,    1)  # top
+    if s & 0x02: oled.fill_rect(x+w-t, y+t,       t,     hw-t, 1)  # top-R
+    if s & 0x04: oled.fill_rect(x+w-t, y+hw,      t,     hw-t, 1)  # bot-R
+    if s & 0x08: oled.fill_rect(x+t,   y+h-t,     w-2*t, t,    1)  # bot
+    if s & 0x10: oled.fill_rect(x,     y+hw,      t,     hw-t, 1)  # bot-L
+    if s & 0x20: oled.fill_rect(x,     y+t,       t,     hw-t, 1)  # top-L
+    if s & 0x40: oled.fill_rect(x+t,   y+hw-t//2, w-2*t, t,    1)  # mid
 
-def bill_text_x(bill, scale):
-    return max(0, (128 - len(bill) * 8 * scale) // 2)
-
-def draw_text_large(text, x, y, scale):
-    sw = min(len(text) * 8, 64)
-    _tsrc_fb.fill(0)
-    _tsrc_fb.text(text, 0, 0, 1)
-    for cy in range(8):
-        for cx in range(sw):
-            if _tsrc_fb.pixel(cx, cy):
-                oled.fill_rect(x + cx * scale, y + cy * scale, scale, scale, 1)
+def draw_digital(text):
+    """Draw text in 7-segment style, auto-sized to fill the screen width."""
+    n = len(text)
+    if n == 0:
+        return
+    gap = 2
+    h   = 28                                   # leaves 2 px top + 2 px bottom
+    w   = max(8, (128 - (n - 1) * gap) // n)  # char width fills screen
+    t   = max(2, w // 8)                       # segment thickness
+    x0  = (128 - (n * w + (n - 1) * gap)) // 2
+    y0  = (32 - h) // 2                        # = 2
+    for i, ch in enumerate(text):
+        _draw_seg_char(ch, x0 + i * (w + gap), y0, w, h, t)
 
 # ── OLED drawing ─────────────────────────────────────
 def splash(line1, line2=""):
@@ -95,9 +116,7 @@ def draw_content(bill):
     if not bill or bill == "__UNKNOWN__":
         oled.blit(logo_fb, LOGO_X, 0)
     else:
-        scale = get_scale(bill)
-        ty    = (32 - 8 * scale) // 2
-        draw_text_large(bill, bill_text_x(bill, scale), ty, scale)
+        draw_digital(bill)
 
 def draw_final(bill):
     draw_content(bill)
@@ -110,15 +129,11 @@ def draw_squished(bill, h):
 
     if not bill or bill == "__UNKNOWN__":
         oled.blit(logo_fb, LOGO_X, 0)
-        if y_top > 0:  oled.fill_rect(0, 0, 128, y_top, 0)
-        if y_bot < 32: oled.fill_rect(0, y_bot, 128, 32 - y_bot, 0)
     else:
-        scale = get_scale(bill)
-        ty    = (32 - 8 * scale) // 2
-        draw_text_large(bill, bill_text_x(bill, scale), ty, scale)
-        if y_top > 0:  oled.fill_rect(0, 0, 128, y_top, 0)
-        if y_bot < 32: oled.fill_rect(0, y_bot, 128, 32 - y_bot, 0)
+        draw_digital(bill)
 
+    if y_top > 0:  oled.fill_rect(0, 0,     128, y_top,      0)
+    if y_bot < 32: oled.fill_rect(0, y_bot, 128, 32 - y_bot, 0)
     oled.show()
 
 # ── Flip animation (non-blocking) ─────────────────────
