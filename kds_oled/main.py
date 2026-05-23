@@ -1,5 +1,5 @@
 # main.py — Kried KDS OLED display
-# MicroPython on ESP32-S3  |  v2.1.6
+# MicroPython on ESP32-S3  |  v2.1.7
 # OTA: bump version.txt + push this file to GitHub → device updates on next boot.
 
 import network, time, math, framebuf
@@ -111,7 +111,7 @@ def draw_content(bill):
     if not bill or bill == "__UNKNOWN__":
         oled.blit(logo_fb, LOGO_X, 0)
     else:
-        draw_dotmatrix("B" + bill)
+        draw_dotmatrix(bill)
 
 def draw_final(bill):
     draw_content(bill)
@@ -124,7 +124,7 @@ def draw_squished(bill, h):
     if not bill or bill == "__UNKNOWN__":
         oled.blit(logo_fb, LOGO_X, 0)
     else:
-        draw_dotmatrix("B" + bill)
+        draw_dotmatrix(bill)
     if y_top > 0:  oled.fill_rect(0, 0,     128, y_top,      0)
     if y_bot < 32: oled.fill_rect(0, y_bot, 128, 32 - y_bot, 0)
     oled.show()
