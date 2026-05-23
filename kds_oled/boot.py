@@ -3,7 +3,7 @@
 # It connects WiFi, checks GitHub for a newer main.py, downloads it, then
 # falls through into main.py.  If WiFi fails OTA is skipped silently.
 
-import network, time, machine, os
+import network, time, machine, os, gc
 
 WIFI_SSID     = "Airtel_Rk?s Wifi"
 WIFI_PASSWORD = "wifi1234"
@@ -67,30 +67,69 @@ def connect_wifi():
 def check_ota():
     try:
         import urequests
+
+        # Free heap before making requests — prevents silent partial downloads
+        gc.collect()
+
         splash("Checking OTA", "v" + VERSION)
         r = urequests.get(OTA_VERSION_URL, timeout=10)
         latest = r.text.strip()
         r.close()
+        del r
+        gc.collect()  # free the response before the big download
 
         if latest == VERSION:
             splash("Firmware OK", "v" + VERSION)
             time.sleep_ms(800)
             return
 
-        # Newer version available — download main.py
+        # ── Download new main.py ──────────────────────
         splash("Updating...", VERSION + ">" + latest)
         r = urequests.get(OTA_MAIN_URL, timeout=30)
         content = r.text
         r.close()
+        del r
+        gc.collect()
 
-        with open("main.py", "w") as f:
+        # Validate: must be a real Python file, not an error page or empty body
+        if len(content) < 500 or not content.startswith("#"):
+            splash("OTA error", "bad download")
+            time.sleep_ms(2000)
+            return
+
+        # Write to a temp file first — never touch main.py until we're sure
+        with open("main_ota.py", "w") as f:
             f.write(content)
+        del content
+        gc.collect()
 
-        # Save installed version so next boot doesn't re-download
+        # Verify the temp file was written completely
+        try:
+            written = os.stat("main_ota.py")[6]  # index 6 = file size in bytes
+        except:
+            written = 0
+
+        if written < 500:
+            splash("OTA error", "write failed")
+            time.sleep_ms(2000)
+            try:
+                os.remove("main_ota.py")
+            except:
+                pass
+            return
+
+        # Atomic swap: remove old main.py, rename temp into place
+        try:
+            os.remove("main.py")
+        except:
+            pass
+        os.rename("main_ota.py", "main.py")
+
+        # Only save the new version AFTER main.py is confirmed on disk
         with open("fw_version.txt", "w") as f:
             f.write(latest)
 
-        splash("Done!", "rebooting...")
+        splash("Done! v" + latest, "rebooting...")
         time.sleep_ms(1000)
         machine.reset()
 
