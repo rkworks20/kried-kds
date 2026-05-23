@@ -7,7 +7,7 @@ import network, time, machine, os, gc
 
 WIFI_NETWORKS = [
     ("Airtel_Rk?s Wifi", "wifi1234"),
-    ("Ram's Phone",       "12345678"),
+    ("Ram_Phone",         "12345678"),
 ]
 
 # Read the installed version from a local file written after each OTA update.
