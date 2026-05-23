@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#141414">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Kitchen Display System</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
@@ -294,11 +298,171 @@
 
   /* ── Mobile overrides ── */
   @media (max-width: 767px) {
+
+    /* Global touch feel */
+    * { -webkit-tap-highlight-color: transparent; }
+    button { touch-action: manipulation; }
+
+    /* Body */
+    body { height: 100dvh; overflow: hidden; }
+
+    /* Header */
     .hamburger-btn { display: flex; }
     .header-right  { display: none; }
-    .stations      { display: block; }
-    .station, .bills-column { display: none !important; height: 100%; border-right: none; }
-    .station.mob-active, .bills-column.mob-active { display: flex !important; }
+    header { padding: 10px 14px; gap: 10px; }
+    .header-title  { font-size: 16px; letter-spacing: 2px; }
+
+    /* Stations container */
+    .stations { display: block; }
+    .station, .bills-column {
+      display: none !important;
+      height: 100%;
+      border-right: none;
+    }
+    .station.mob-active,
+    .bills-column.mob-active { display: flex !important; }
+
+    /* Station body */
+    .station { padding: 14px; gap: 10px; }
+    .station-header { padding-bottom: 10px; }
+    .station-name   { font-size: 22px; letter-spacing: 2px; }
+    .station-meta   { font-size: 10px; line-height: 1.4; }
+
+    /* Batch grid — keep 2-col, scale card content down */
+    .batch-grid { gap: 8px; }
+    .item-card  { padding: 10px 12px; gap: 4px; }
+    .item-qty   { font-size: 34px; }
+    .item-name  { font-size: 10px; letter-spacing: 0.5px; }
+    .item-bills { font-size: 9px; }
+
+    /* Station footer */
+    .station-footer { height: auto; min-height: 52px; padding-top: 10px; gap: 8px; }
+    .done-btn       { font-size: 18px; letter-spacing: 2px; padding: 14px 18px; flex: 1; min-height: 48px; }
+    .history-btn    { width: 38px; height: 38px; font-size: 15px; }
+    .history-label  { font-size: 10px; min-width: 52px; }
+    .completed-tag  { font-size: 11px; padding: 8px 12px; }
+
+    /* Bills column header */
+    .bills-header     { padding: 10px 14px; }
+    .bills-title      { font-size: 20px; letter-spacing: 2px; }
+    .bills-action-btn { font-size: 10px; padding: 8px 12px; min-height: 36px; }
+    .bills-scroll     { padding: 12px; }
+
+    /* Bill cards */
+    .bill-card::before,
+    .bill-card::after  { height: 8px; background-size: 8px 8px; }
+    .bill-inner        { padding: 10px 14px 6px; }
+    .bill-id           { font-size: 22px; }
+    .bill-complete-check { font-size: 22px; }
+    .bill-item-row     { font-size: 12px; gap: 8px; }
+    .bill-item-name    { font-size: 12px; }
+    .bill-item-qty     { font-size: 13px; }
+    .bill-item-check   { width: 20px; height: 20px; flex-shrink: 0; }
+    .bill-item-icon    { font-size: 16px; }
+    .deliver-btn       { font-size: 15px; letter-spacing: 1px; padding: 13px 0; min-height: 48px; }
+    .skip-btn          { font-size: 10px; padding: 6px 10px; }
+    .on-display-tag    { font-size: 10px; padding: 4px 8px; }
+
+    /* Settings modal — full screen */
+    .modal-overlay { align-items: stretch; padding: 0; }
+    .modal {
+      width: 100% !important;
+      height: 100% !important;
+      max-height: 100% !important;
+      border: none;
+      border-radius: 0;
+    }
+    .modal-header { padding: 14px 16px; }
+    .modal-title  { font-size: 22px; letter-spacing: 3px; }
+    .modal-body   { flex-direction: column; overflow: hidden; }
+
+    /* Nav tabs — horizontal scroll strip */
+    .modal-nav {
+      width: 100% !important;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      display: flex !important;
+      flex-direction: row;
+      overflow-x: auto;
+      padding: 0;
+      flex-shrink: 0;
+      scrollbar-width: none;
+    }
+    .modal-nav::-webkit-scrollbar { display: none; }
+    .modal-nav-item {
+      white-space: nowrap;
+      border-left: none !important;
+      border-bottom: 2px solid transparent;
+      padding: 12px 16px;
+      font-size: 10px;
+      flex-shrink: 0;
+    }
+    .modal-nav-item.active {
+      border-left-color: transparent !important;
+      border-bottom-color: var(--text-primary);
+    }
+    .modal-content { padding: 16px; }
+    .modal-footer  { padding: 12px 16px; }
+    .btn-save, .btn-cancel { font-size: 14px; padding: 12px 18px; flex: 1; }
+
+    /* Settings controls — finger-sized */
+    .settings-row { flex-wrap: wrap; gap: 10px; padding: 14px 0; }
+    .settings-label { font-size: 13px; }
+    /* font-size ≥ 16px prevents iOS auto-zoom on input focus */
+    .s-input        { font-size: 16px; padding: 10px; width: 100%; }
+    .s-input-wide   { width: 100%; }
+    .s-stepper button { width: 44px; height: 44px; font-size: 18px; }
+    .s-stepper span   { height: 44px; font-size: 15px; width: 52px; }
+    .s-toggle         { width: 48px; height: 28px; border-radius: 14px; }
+    .s-toggle::after  { width: 22px; height: 22px; top: 3px; }
+    .s-toggle.on::after { left: 23px; }
+    .s-select { font-size: 16px; padding: 10px; }
+
+    /* Bills history modal — bottom sheet */
+    .bh-overlay { align-items: flex-end; }
+    .bh-dialog  {
+      width: 100% !important;
+      max-height: 88vh;
+      border-left: none;
+      border-right: none;
+      border-bottom: none;
+      animation: bhSlideUp 0.25s ease;
+    }
+    @keyframes bhSlideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .bh-header { padding: 14px 16px; }
+    .bh-title  { font-size: 20px; }
+    .bh-body   { padding: 12px; }
+    .bh-entry  { padding: 10px 14px; gap: 10px; }
+    .bh-entry-id { font-size: 20px; }
+
+    /* Reconnecting overlay text */
+    #ws-overlay > div:first-child { font-size: 24px; }
+
+    /* Mobile picker improvements */
+    .mob-picker-btn { padding: 18px 20px; font-size: 20px; }
+    .mob-picker-icon { font-size: 22px; }
+    .mob-picker-title { font-size: 26px; }
+  }
+
+  /* Safe-area insets for notched phones (iPhone X+) */
+  @supports (padding: max(0px)) {
+    @media (max-width: 767px) {
+      header         { padding-left:  max(14px, env(safe-area-inset-left));
+                       padding-right: max(14px, env(safe-area-inset-right)); }
+      .station,
+      .bills-column  { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+      .ham-drawer    { padding-bottom: env(safe-area-inset-bottom); }
+      .mob-picker    { padding-bottom: max(32px, env(safe-area-inset-bottom)); }
+      .bh-dialog     { padding-bottom: env(safe-area-inset-bottom); }
+    }
+  }
+
+  /* Extra small phones */
+  @media (max-width: 374px) {
+    .item-qty  { font-size: 28px; }
+    .done-btn  { font-size: 16px; padding: 12px 14px; }
+    .station   { padding: 10px; }
+    .batch-grid { gap: 6px; }
   }
 </style>
 </head>
