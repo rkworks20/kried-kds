@@ -7,7 +7,17 @@ import network, time, machine, os
 
 WIFI_SSID     = "Airtel_Rk?s Wifi"
 WIFI_PASSWORD = "wifi1234"
-VERSION       = "2.0.0"
+
+# Read the installed version from a local file written after each OTA update.
+# Falls back to "0.0.0" on first boot so the initial download always runs.
+def _read_local_version():
+    try:
+        with open("fw_version.txt") as f:
+            return f.read().strip()
+    except:
+        return "0.0.0"
+
+VERSION = _read_local_version()
 
 OTA_VERSION_URL = "https://raw.githubusercontent.com/rkworks20/kried-kds/main/kds_oled/version.txt"
 OTA_MAIN_URL    = "https://raw.githubusercontent.com/rkworks20/kried-kds/main/kds_oled/main.py"
@@ -75,6 +85,10 @@ def check_ota():
 
         with open("main.py", "w") as f:
             f.write(content)
+
+        # Save installed version so next boot doesn't re-download
+        with open("fw_version.txt", "w") as f:
+            f.write(latest)
 
         splash("Done!", "rebooting...")
         time.sleep_ms(1000)
