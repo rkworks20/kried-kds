@@ -1,5 +1,5 @@
 # main.py — Kried KDS OLED display
-# MicroPython on ESP32-S3  |  v2.1.1
+# MicroPython on ESP32-S3  |  v2.1.3
 # OTA: bump version.txt + push this file to GitHub → device updates on next boot.
 
 import network, time, math, framebuf
@@ -59,69 +59,44 @@ LOGO_BMP = bytearray(b ^ 0xff for b in _logo_raw)
 logo_fb  = framebuf.FrameBuffer(LOGO_BMP, 81, 32, framebuf.MONO_HLSB)
 LOGO_X   = (128 - 81) // 2
 
-# ── 5×7 dot-matrix font ───────────────────────────────
-# Each char: 7 rows, each row is a 5-bit value (bit4=left col, bit0=right col)
-_FONT = {
-    '0':[0x0E,0x11,0x11,0x11,0x11,0x11,0x0E],
-    '1':[0x04,0x0C,0x04,0x04,0x04,0x04,0x0E],
-    '2':[0x0E,0x11,0x01,0x02,0x04,0x08,0x1F],
-    '3':[0x0E,0x11,0x01,0x06,0x01,0x11,0x0E],
-    '4':[0x02,0x06,0x0A,0x12,0x1F,0x02,0x02],
-    '5':[0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E],
-    '6':[0x06,0x08,0x10,0x1E,0x11,0x11,0x0E],
-    '7':[0x1F,0x01,0x02,0x04,0x08,0x08,0x08],
-    '8':[0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E],
-    '9':[0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C],
-    'A':[0x0E,0x11,0x11,0x1F,0x11,0x11,0x11],
-    'B':[0x1E,0x11,0x11,0x1E,0x11,0x11,0x1E],
-    'C':[0x0E,0x11,0x10,0x10,0x10,0x11,0x0E],
-    'D':[0x1E,0x11,0x11,0x11,0x11,0x11,0x1E],
-    'E':[0x1F,0x10,0x10,0x1E,0x10,0x10,0x1F],
-    'F':[0x1F,0x10,0x10,0x1E,0x10,0x10,0x10],
-    'G':[0x0E,0x11,0x10,0x17,0x11,0x11,0x0E],
-    'H':[0x11,0x11,0x11,0x1F,0x11,0x11,0x11],
-    'I':[0x0E,0x04,0x04,0x04,0x04,0x04,0x0E],
-    'J':[0x07,0x02,0x02,0x02,0x02,0x12,0x0C],
-    'K':[0x11,0x12,0x14,0x18,0x14,0x12,0x11],
-    'L':[0x10,0x10,0x10,0x10,0x10,0x10,0x1F],
-    'M':[0x11,0x1B,0x15,0x11,0x11,0x11,0x11],
-    'N':[0x11,0x19,0x15,0x13,0x11,0x11,0x11],
-    'O':[0x0E,0x11,0x11,0x11,0x11,0x11,0x0E],
-    'P':[0x1E,0x11,0x11,0x1E,0x10,0x10,0x10],
-    'Q':[0x0E,0x11,0x11,0x11,0x15,0x12,0x0D],
-    'R':[0x1E,0x11,0x11,0x1E,0x14,0x12,0x11],
-    'S':[0x0E,0x11,0x10,0x0E,0x01,0x11,0x0E],
-    'T':[0x1F,0x04,0x04,0x04,0x04,0x04,0x04],
-    'U':[0x11,0x11,0x11,0x11,0x11,0x11,0x0E],
-    'V':[0x11,0x11,0x11,0x11,0x11,0x0A,0x04],
-    'W':[0x11,0x11,0x11,0x15,0x15,0x1B,0x11],
-    'X':[0x11,0x11,0x0A,0x04,0x0A,0x11,0x11],
-    'Y':[0x11,0x11,0x0A,0x04,0x04,0x04,0x04],
-    'Z':[0x1F,0x01,0x02,0x04,0x08,0x10,0x1F],
-    '-':[0x00,0x00,0x00,0x1F,0x00,0x00,0x00],
-    ' ':[0x00,0x00,0x00,0x00,0x00,0x00,0x00],
+# ── 3×5 Mega Block font ───────────────────────────────
+# Each char: 5 rows, each row is a 3-bit value (bit2=left col, bit0=right col)
+_FONT3 = {
+    '0': [0b111, 0b101, 0b101, 0b101, 0b111],
+    '1': [0b110, 0b010, 0b010, 0b010, 0b111],
+    '2': [0b111, 0b001, 0b111, 0b100, 0b111],
+    '3': [0b111, 0b001, 0b111, 0b001, 0b111],
+    '4': [0b101, 0b101, 0b111, 0b001, 0b001],
+    '5': [0b111, 0b100, 0b111, 0b001, 0b111],
+    '6': [0b111, 0b100, 0b111, 0b101, 0b111],
+    '7': [0b111, 0b001, 0b001, 0b010, 0b010],
+    '8': [0b111, 0b101, 0b111, 0b101, 0b111],
+    '9': [0b111, 0b101, 0b111, 0b001, 0b111],
+    '-': [0b000, 0b000, 0b111, 0b000, 0b000],
+    ' ': [0b000, 0b000, 0b000, 0b000, 0b000],
 }
 
-def draw_dotmatrix(text):
-    """Draw text as a 5×7 dot-matrix, auto-sized to fill the screen width."""
+def draw_mega(text):
+    """Draw text as 3×5 mega blocks, auto-sized to fill the screen."""
     n = len(text)
     if n == 0:
         return
-    gap = 2                                          # px between chars
-    dy  = 4                                          # dot height (fixed by screen)
-    dx  = min((128 - (n-1)*gap) // (5*n), dy*2)    # dot width, max 2× height
-    dx  = max(3, dx)
-    char_w = 5 * dx
-    total  = n * char_w + (n-1) * gap
+    gap = 4                                       # px between chars
+    dy  = 6                                       # dot height: 5×6 = 30px, fits in 32
+    dx  = (124 - (n - 1) * gap) // (3 * n)      # dot width from available space
+    dx  = max(4, min(dx, 12))                     # clamp: min 4, max 12
+    char_w = 3 * dx
+    total  = n * char_w + (n - 1) * gap
     x0     = (128 - total) // 2
-    y0     = (32 - 7 * dy) // 2                     # vertically centred
+    y0     = (32 - 5 * dy) // 2                  # vertically centred
     for i, ch in enumerate(text):
-        rows = _FONT.get(ch.upper(), _FONT['-'])
+        rows = _FONT3.get(ch, _FONT3[' '])
         cx = x0 + i * (char_w + gap)
         for row, bits in enumerate(rows):
-            for col in range(5):
-                if bits & (0x10 >> col):
-                    oled.fill_rect(cx + col*dx, y0 + row*dy, dx, dy, 1)
+            for col in range(3):
+                if bits & (0b100 >> col):
+                    # dx-1, dy-1 leave a 1 px gap between blocks
+                    oled.fill_rect(cx + col * dx, y0 + row * dy, dx - 1, dy - 1, 1)
 
 # ── OLED drawing ─────────────────────────────────────
 def splash(line1, line2=""):
@@ -136,7 +111,7 @@ def draw_content(bill):
     if not bill or bill == "__UNKNOWN__":
         oled.blit(logo_fb, LOGO_X, 0)
     else:
-        draw_dotmatrix(bill)
+        draw_mega(bill)
 
 def draw_final(bill):
     draw_content(bill)
@@ -149,7 +124,7 @@ def draw_squished(bill, h):
     if not bill or bill == "__UNKNOWN__":
         oled.blit(logo_fb, LOGO_X, 0)
     else:
-        draw_dotmatrix(bill)
+        draw_mega(bill)
     if y_top > 0:  oled.fill_rect(0, 0,     128, y_top,      0)
     if y_bot < 32: oled.fill_rect(0, y_bot, 128, 32 - y_bot, 0)
     oled.show()
