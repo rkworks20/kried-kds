@@ -1,5 +1,5 @@
 # main.py — Kried KDS OLED display
-# MicroPython on ESP32-S3  |  v2.1.7
+# MicroPython on ESP32-S3  |  v2.1.8
 # OTA: bump version.txt + push this file to GitHub → device updates on next boot.
 
 import network, time, math, framebuf
@@ -8,12 +8,14 @@ import urequests
 import ssd1306
 
 # ── Config ───────────────────────────────────────────
-WIFI_SSID       = "Airtel_Rk?s Wifi"
-WIFI_PASSWORD   = "wifi1234"
+WIFI_NETWORKS = [
+    ("Airtel_Rk?s Wifi", "wifi1234"),
+    ("Ram's Phone",       "12345678"),
+]
 SERVER_HOST     = "kried-kds-production.up.railway.app"
 UPDATE_INTERVAL = 3000
 WIFI_RETRY      = 5000
-WIFI_TIMEOUT    = 15000
+WIFI_TIMEOUT    = 10000   # per network attempt
 
 # ── Hardware ─────────────────────────────────────────
 i2c  = I2C(0, scl=Pin(6), sda=Pin(5), freq=400_000)
@@ -226,17 +228,26 @@ current_bill   = "__UNKNOWN__"
 def try_wifi():
     global _last_wifi_t
     _last_wifi_t = time.ticks_ms()
-    splash("Connecting...", WIFI_SSID[:16])
-    if not wlan.isconnected():
-        wlan.connect(WIFI_SSID, WIFI_PASSWORD)
-    deadline = time.ticks_add(time.ticks_ms(), WIFI_TIMEOUT)
-    while not wlan.isconnected():
-        if time.ticks_diff(deadline, time.ticks_ms()) <= 0:
-            splash("WiFi failed")
-            time.sleep_ms(1000)
-            return
-    splash("Connected!", wlan.ifconfig()[0])
-    time.sleep_ms(400)
+    for ssid, password in WIFI_NETWORKS:
+        if wlan.isconnected():
+            break
+        splash("Connecting...", ssid[:16])
+        wlan.disconnect()
+        time.sleep_ms(200)
+        wlan.connect(ssid, password)
+        deadline = time.ticks_add(time.ticks_ms(), WIFI_TIMEOUT)
+        while not wlan.isconnected():
+            if time.ticks_diff(deadline, time.ticks_ms()) <= 0:
+                splash("Trying next...", ssid[:16])
+                time.sleep_ms(400)
+                break
+            time.sleep_ms(200)
+    if wlan.isconnected():
+        splash("Connected!", wlan.ifconfig()[0])
+        time.sleep_ms(400)
+    else:
+        splash("WiFi failed")
+        time.sleep_ms(1000)
 
 def poll_bill():
     global current_bill

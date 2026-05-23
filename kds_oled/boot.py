@@ -5,8 +5,10 @@
 
 import network, time, machine, os, gc
 
-WIFI_SSID     = "Airtel_Rk?s Wifi"
-WIFI_PASSWORD = "wifi1234"
+WIFI_NETWORKS = [
+    ("Airtel_Rk?s Wifi", "wifi1234"),
+    ("Ram's Phone",       "12345678"),
+]
 
 # Read the installed version from a local file written after each OTA update.
 # Falls back to "0.0.0" on first boot so the initial download always runs.
@@ -22,7 +24,7 @@ VERSION = _read_local_version()
 OTA_VERSION_URL = "https://raw.githubusercontent.com/rkworks20/kried-kds/main/kds_oled/version.txt"
 OTA_MAIN_URL    = "https://raw.githubusercontent.com/rkworks20/kried-kds/main/kds_oled/main.py"
 
-WIFI_TIMEOUT = 15000  # ms
+WIFI_TIMEOUT = 10000  # ms per network attempt
 
 # ── OLED (optional — gracefully skipped if driver not installed yet) ─────────
 oled = None
@@ -52,16 +54,25 @@ wlan.active(True)
 def connect_wifi():
     if wlan.isconnected():
         return True
-    splash("Connecting...", WIFI_SSID[:16])
-    wlan.connect(WIFI_SSID, WIFI_PASSWORD)
-    deadline = time.ticks_add(time.ticks_ms(), WIFI_TIMEOUT)
-    while not wlan.isconnected():
-        if time.ticks_diff(deadline, time.ticks_ms()) <= 0:
-            splash("WiFi failed", "skipping OTA")
-            time.sleep_ms(1500)
-            return False
+    for ssid, password in WIFI_NETWORKS:
+        if wlan.isconnected():
+            break
+        splash("Connecting...", ssid[:16])
+        wlan.disconnect()
         time.sleep_ms(200)
-    return True
+        wlan.connect(ssid, password)
+        deadline = time.ticks_add(time.ticks_ms(), WIFI_TIMEOUT)
+        while not wlan.isconnected():
+            if time.ticks_diff(deadline, time.ticks_ms()) <= 0:
+                splash("Trying next...", ssid[:16])
+                time.sleep_ms(400)
+                break
+            time.sleep_ms(200)
+    if wlan.isconnected():
+        return True
+    splash("WiFi failed", "skipping OTA")
+    time.sleep_ms(1500)
+    return False
 
 # ── OTA ──────────────────────────────────────────────
 def check_ota():
