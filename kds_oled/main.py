@@ -105,7 +105,7 @@ def draw_content(bill):
     oled.fill(0)
     if not bill or bill == "__UNKNOWN__":
         oled.blit(logo_fb, LOGO_X, 0)
-        oled.text("1", 120, 12, 1)  # tiny "1" right of logo, vertically centred
+        oled.text("2", 120, 12, 1)  # tiny "1" right of logo, vertically centred
     else:
         draw_text_large(bill, bill_text_x(bill), 4)  # y=4: (32-24)/2=4
 
