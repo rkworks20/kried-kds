@@ -229,12 +229,84 @@
   .btn-cancel:hover { border-color: #555; color: var(--text-primary); }
 
   .hidden { display: none !important; }
+
+  /* ── Hamburger button (mobile only) ── */
+  .hamburger-btn {
+    display: none; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text-primary); font-size: 22px; width: 40px; height: 40px;
+    align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; line-height: 1;
+  }
+
+  /* ── Hamburger drawer ── */
+  .ham-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 300; }
+  .ham-overlay.open { display: block; }
+  .ham-drawer {
+    position: fixed; top: 0; right: -300px; bottom: 0; width: 280px;
+    background: var(--surface); border-left: 1px solid var(--border);
+    z-index: 301; display: flex; flex-direction: column;
+    transition: right 0.25s ease; box-shadow: -8px 0 32px rgba(0,0,0,0.5);
+  }
+  .ham-drawer.open { right: 0; }
+  .ham-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .ham-head-title { font-family: var(--font-display); font-size: 20px; letter-spacing: 3px; }
+  .ham-close { background: none; border: 1px solid var(--border); color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; padding: 5px 10px; cursor: pointer; letter-spacing: 1px; }
+  .ham-close:hover { border-color: #555; color: var(--text-primary); }
+  .ham-body { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 4px; }
+  .ham-stats { display: flex; gap: 16px; font-size: 11px; color: var(--text-muted); letter-spacing: 1px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .ham-stats span { color: var(--text-primary); font-weight: 700; }
+  .ham-clock-row { font-size: 12px; color: var(--text-muted); letter-spacing: 1px; padding: 10px 0 12px; border-bottom: 1px solid var(--border); }
+  .ham-label { font-size: 9px; letter-spacing: 2px; color: var(--text-muted); padding: 14px 0 6px; }
+  .ham-col-btn {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text-muted); font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px;
+    padding: 12px 14px; cursor: pointer; transition: all 0.15s; width: 100%; text-align: left; margin-bottom: 6px;
+  }
+  .ham-col-btn:hover { border-color: #555; color: var(--text-primary); }
+  .ham-col-btn.active { border-color: var(--text-primary); color: var(--text-primary); background: #222; }
+  .ham-col-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .ham-col-btn.active .ham-col-dot { background: var(--text-primary); }
+  .ham-action-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-muted); font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px;
+    padding: 10px 14px; cursor: pointer; transition: all 0.15s; width: 100%; text-align: left; margin-bottom: 6px;
+  }
+  .ham-action-btn:hover { border-color: #555; color: var(--text-primary); }
+
+  /* ── Mobile column picker ── */
+  .mob-picker {
+    display: none; position: fixed; inset: 0; background: var(--bg); z-index: 400;
+    flex-direction: column; align-items: center; justify-content: center; padding: 32px;
+  }
+  .mob-picker.open { display: flex; }
+  .mob-picker-title { font-family: var(--font-display); font-size: 30px; letter-spacing: 4px; margin-bottom: 6px; }
+  .mob-picker-sub { font-size: 11px; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 40px; text-align: center; }
+  .mob-picker-btns { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 300px; }
+  .mob-picker-btn {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text-primary); font-family: var(--font-display); font-size: 22px; letter-spacing: 3px;
+    padding: 20px 22px; cursor: pointer; transition: background 0.15s, border-color 0.15s; text-align: left;
+  }
+  .mob-picker-btn:hover, .mob-picker-btn:active { background: var(--surface2); border-color: #555; }
+  .mob-picker-icon { font-size: 24px; line-height: 1; }
+
+  /* ── Mobile overrides ── */
+  @media (max-width: 767px) {
+    .hamburger-btn { display: flex; }
+    .header-right  { display: none; }
+    .stations      { display: block; }
+    .station, .bills-column { display: none !important; height: 100%; border-right: none; }
+    .station.mob-active, .bills-column.mob-active { display: flex !important; }
+  }
 </style>
 </head>
 <body>
 
 <header>
   <div class="header-title" id="header-title">KDS — KRIED KITCHEN</div>
+  <button class="hamburger-btn" onclick="toggleHamburger()">☰</button>
   <div class="header-right">
     <div class="queue-info">BURGERS: <span id="burger-queue-count">0</span></div>
     <div class="queue-info">FRIES: <span id="fries-queue-count">0</span></div>
@@ -295,6 +367,42 @@
       </div>
     </div>
     <div class="bills-scroll" id="bills-scroll"></div>
+  </div>
+</div>
+
+<!-- Hamburger overlay -->
+<div class="ham-overlay" id="ham-overlay" onclick="closeHamburger()"></div>
+
+<!-- Hamburger drawer -->
+<div class="ham-drawer" id="ham-drawer">
+  <div class="ham-head">
+    <div class="ham-head-title">MENU</div>
+    <button class="ham-close" onclick="closeHamburger()">✕ CLOSE</button>
+  </div>
+  <div class="ham-body">
+    <div class="ham-stats">
+      <div>BURGERS: <span id="hm-burger-count">0</span></div>
+      <div>FRIES: <span id="hm-fries-count">0</span></div>
+    </div>
+    <div class="ham-clock-row" id="hm-clock">--:--:--</div>
+    <div class="ham-label">VIEW STATION</div>
+    <button class="ham-col-btn" id="hm-col-burger" onclick="mobileSetColumn('burger')"><div class="ham-col-dot"></div>🍔 BURGERS</button>
+    <button class="ham-col-btn" id="hm-col-fries"  onclick="mobileSetColumn('fries')"><div class="ham-col-dot"></div>🍟 FRIES &amp; STRIPS</button>
+    <button class="ham-col-btn" id="hm-col-bills"  onclick="mobileSetColumn('bills')"><div class="ham-col-dot"></div>📋 BILLS</button>
+    <div class="ham-label">ACTIONS</div>
+    <button class="ham-action-btn" onclick="addRandomOrder(); closeHamburger()">＋ SIMULATE ORDER</button>
+    <button class="ham-action-btn" onclick="openSettings(); closeHamburger()">⚙ SETTINGS</button>
+  </div>
+</div>
+
+<!-- Mobile column picker -->
+<div class="mob-picker" id="mob-picker">
+  <div class="mob-picker-title">SELECT STATION</div>
+  <div class="mob-picker-sub">CHOOSE A COLUMN TO DISPLAY</div>
+  <div class="mob-picker-btns">
+    <button class="mob-picker-btn" onclick="mobileSetColumn('burger')"><span class="mob-picker-icon">🍔</span>BURGERS</button>
+    <button class="mob-picker-btn" onclick="mobileSetColumn('fries')"><span class="mob-picker-icon">🍟</span>FRIES &amp; STRIPS</button>
+    <button class="mob-picker-btn" onclick="mobileSetColumn('bills')"><span class="mob-picker-icon">📋</span>BILLS</button>
   </div>
 </div>
 
@@ -1132,6 +1240,10 @@ function render() {
   renderBills();
   document.getElementById('burger-queue-count').textContent = burgerQueue.length;
   document.getElementById('fries-queue-count').textContent  = friesQueue.length;
+  const hmb = document.getElementById('hm-burger-count');
+  const hmf = document.getElementById('hm-fries-count');
+  if (hmb) hmb.textContent = burgerQueue.length;
+  if (hmf) hmf.textContent = friesQueue.length;
   updateHistoryNav('burger');
   updateHistoryNav('fries');
 }
@@ -1159,6 +1271,7 @@ function addRandomOrder() {
 
 // ── Columns ──
 function updateGrid() {
+  if (window.innerWidth < 768) return;  // mobile: handled by mobileSetColumn
   const visible   = Object.entries(visibleCols).filter(([,v])=>v).map(([k])=>k);
   const billsOnly = visible.length === 1 && visibleCols.bills;
   document.getElementById('stations').style.gridTemplateColumns =
@@ -1261,9 +1374,12 @@ function stepValue(id, delta, min, max) {
 // ── Clock & timers ──
 setInterval(() => {
   const now = new Date();
-  document.getElementById('clock').textContent = CLOCK_FORMAT === '12'
+  const timeStr = CLOCK_FORMAT === '12'
     ? now.toLocaleTimeString('en-US', { hour12: true })
     : now.toLocaleTimeString('en-US', { hour12: false });
+  document.getElementById('clock').textContent = timeStr;
+  const hmClock = document.getElementById('hm-clock');
+  if (hmClock) hmClock.textContent = timeStr;
 
   document.querySelectorAll('.display-timer').forEach(el => {
     const secs = Math.floor((Date.now() - parseInt(el.dataset.since, 10)) / 1000);
@@ -1283,9 +1399,41 @@ setInterval(() => {
 }, 1000);
 document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
 
+// ── Mobile ──
+let mobileActiveCol = null;
+
+function mobileSetColumn(col) {
+  mobileActiveCol = col;
+  ['burger', 'fries', 'bills'].forEach(k => {
+    document.getElementById(`col-${k}`).classList.toggle('mob-active', k === col);
+    const btn = document.getElementById(`hm-col-${k}`);
+    if (btn) btn.classList.toggle('active', k === col);
+  });
+  document.getElementById('mob-picker').classList.remove('open');
+  closeHamburger();
+}
+
+function toggleHamburger() {
+  document.getElementById('ham-drawer').classList.toggle('open');
+  document.getElementById('ham-overlay').classList.toggle('open');
+}
+
+function closeHamburger() {
+  document.getElementById('ham-drawer').classList.remove('open');
+  document.getElementById('ham-overlay').classList.remove('open');
+}
+
+// Re-run updateGrid on resize (handles mobile ↔ desktop transitions)
+window.addEventListener('resize', () => { if (window.innerWidth >= 768) updateGrid(); });
+
 // ── Init ──
 updateGrid();
 addRandomOrder(); addRandomOrder(); addRandomOrder();
+
+// Show mobile picker on first load if on a small screen
+if (window.innerWidth < 768) {
+  document.getElementById('mob-picker').classList.add('open');
+}
 </script>
 </body>
 </html>
