@@ -95,6 +95,11 @@ burger_bmp  = bytearray(b ^ 0xff for b in _burger_raw)
 fries_bmp   = bytearray(b ^ 0xff for b in _fries_raw)
 chicken_bmp = bytearray(b ^ 0xff for b in _chicken_raw)
 
+# Clear right-edge line artifacts caused by stray lit pixels in source bitmaps
+for row in range(32):
+    fries_bmp[row * 4 + 3]   &= 0xf0   # fries 30px wide — clear pixels 28-29 + padding
+    chicken_bmp[row * 4 + 3] &= 0xf8   # chicken 32px wide — clear pixels 29-31
+
 logo_fb    = framebuf.FrameBuffer(logo_bmp,    81, 32, framebuf.MONO_HLSB)
 burger_fb  = framebuf.FrameBuffer(burger_bmp,  40, 32, framebuf.MONO_HLSB)
 fries_fb   = framebuf.FrameBuffer(fries_bmp,   30, 32, framebuf.MONO_HLSB)
